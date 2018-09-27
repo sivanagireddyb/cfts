@@ -42,6 +42,8 @@
 				"ImageId": {
 					"Ref": "ImageId"
 				},
+		        "IamInstanceProfile": { "Fn::ImportValue" : {"Fn::Sub": "EC2InstanceProfile"}},
+
 				"KeyName": {
 					"Ref": "EC2KeyPairName"
 				},

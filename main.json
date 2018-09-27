@@ -449,7 +449,7 @@
 		},
 		"Autoscalinggroupstack": {
 			"Type": "AWS::CloudFormation::Stack",
-			"DependsOn": "ADSNLBTargetGroup",
+			"DependsOn": ["ADSNLBTargetGroup","Iampolicies"],
 			"Properties": {
 				"Parameters": {
 					"ImageId": {

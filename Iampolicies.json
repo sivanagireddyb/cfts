@@ -258,5 +258,12 @@
 						]
 					}
 				}
-			}
-		}	
+			},
+		"Outputs" : {
+		"EC2InstanceProfile" : {
+			"Description" : "IAM EC2InstanceProfile",
+			"Value" : { "Ref" : "EC2InstanceProfile" },
+			"Export" : { "Name" : {"Fn::Sub": "EC2InstanceProfile"}}
+	    	}
+    	}
+	}	
