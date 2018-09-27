@@ -1,0 +1,262 @@
+	{
+		"AWSTemplateFormatVersion": "2010-09-09",
+		"Description": "Creating Cloud ADS instances",
+		"Metadata": {
+			"CommitHash": "<<GIT_COMMIT_ID>>",
+			"Version": "<<TEMPLATE_VERSION>>"
+		},
+		"Parameters": {
+			"projectStack": {
+									"Type": "String"
+
+					},
+			"account": {
+									"Type": "String"
+		
+					},
+			"environment": {
+										"Type": "String"
+
+					},
+			
+			"subEnvironment": {
+									"Type": "String"
+
+					},
+			"applicationAssetInsightId": {
+										"Type": "String"
+
+					},
+			"deployment": {
+									"Type": "String"
+	 
+					},
+					"EnvAbbr": {
+									"Type": "String"
+	 
+					},
+					"RegAbbr": {
+									"Type": "String"
+	 
+					}
+			
+		},
+		"Resources": {
+				"EC2InstanceProfile": {
+					"Type": "AWS::IAM::InstanceProfile",
+					"DependsOn": [
+						"EC2Role",
+						"AccessToElbPolicy",
+						"AccessToCWPolicy",
+						"AccessToCWLogsPolicy"
+					],
+					"Properties": {
+						"Path": "/service-role/",
+						"Roles": [
+							{
+								"Ref": "EC2Role"
+							}
+						]
+					}
+				},
+				"EC2Role": {
+					"Type": "AWS::IAM::Role",
+					"Properties": {
+						"RoleName": {
+							"Fn::Sub": "${applicationAssetInsightId}-ec2-${projectStack}--${deployment}-${subEnvironment}-${EnvAbbr}-${RegAbbr}"
+							
+						},
+						"Path": "/LaunchConfig-role/",
+						"AssumeRolePolicyDocument": {
+							"Statement": [
+								{
+									"Effect": "Allow",
+									"Action": [
+										"sts:AssumeRole"
+									],
+									"Principal": {
+										"Service": [
+											"ec2.amazonaws.com"
+										]
+									}
+								}
+							]
+						}
+					}
+				},
+				"AutoScalerRole": {
+					"Type": "AWS::IAM::Role",
+					"Properties": {
+						"RoleName": {
+							"Fn::Sub": 
+								"${applicationAssetInsightId}-as-${projectStack}-${deployment}-${subEnvironment}"
+								
+							
+						},
+						"Path": "/LaunchConfig-role/",
+						"AssumeRolePolicyDocument": {
+							"Statement": [
+								{
+									"Effect": "Allow",
+									"Action": [
+										"sts:AssumeRole"
+									],
+									"Principal": {
+										"Service": [
+											"application-autoscaling.amazonaws.com"
+										]
+									}
+								}
+							]
+						}
+					}
+				},
+				"AccessToCWPolicy": {
+					"Type": "AWS::IAM::Policy",
+					"DependsOn": [
+						"EC2Role"
+					],
+					"Properties": {
+						"PolicyName": {
+							"Fn::Sub": 
+								"${applicationAssetInsightId}-cw-sp-${projectStack}-${deployment}-${subEnvironment}"
+								
+							
+						},
+						"PolicyDocument": {
+							"Statement": [
+								{
+									"Effect": "Allow",
+									"Resource": "*",
+									"Action": [
+										"cloudwatch:PutMetricData",
+										"cloudwatch:GetMetricStatistics"
+									]
+								}
+							]
+						},
+						"Roles": [
+							{
+								"Ref": "EC2Role"
+							}
+						]
+					}
+				},
+				"AccessToCWLogsPolicy": {
+					"Type": "AWS::IAM::Policy",
+					"DependsOn": [
+						"EC2Role"
+					],
+					"Properties": {
+						"PolicyName": {
+							"Fn::Sub": 
+								"${applicationAssetInsightId}-cwlogs-sp-${projectStack}-${deployment}-${subEnvironment}"
+								
+							
+						},
+						"PolicyDocument": {
+							"Statement": [
+								{
+									"Effect": "Allow",
+									"Resource": "*",
+									"Action": [
+										"cloudwatch:PutMetricData",
+										"ec2:DescribeTags",
+										"logs:PutLogEvents",
+										"logs:DescribeLogStreams",
+										"logs:DescribeLogGroups",
+										"logs:CreateLogStream",
+										"logs:CreateLogGroup"
+									]
+								},
+								{
+									"Effect": "Allow",
+									"Resource": "arn:aws:ssm:*:*:parameter/AmazonCloudWatch-*",
+									"Action": [
+										"ssm:GetParameter"
+									]
+								}
+							]
+						},
+						"Roles": [
+							{
+								"Ref": "EC2Role"
+							}
+						]
+					}
+				},
+				"AccessToElbPolicy": {
+					"Type": "AWS::IAM::Policy",
+					"DependsOn": [
+						"EC2Role"
+					],
+					"Properties": {
+						"PolicyName": {
+							"Fn::Sub": 
+								"${applicationAssetInsightId}-elb-sp-${projectStack}-${deployment}-${subEnvironment}"
+								
+							
+						},
+						"PolicyDocument": {
+							"Version": "2012-10-17",
+							"Statement": [
+								{
+									"Effect": "Allow",
+									"Resource": "*",
+									"Action": [
+										"ec2:AuthorizeSecurityGroupIngress",
+										"ec2:Describe*",
+										"elasticloadbalancing:DeregisterInstancesFromLoadBalancer",
+										"elasticloadbalancing:Describe*",
+										"elasticloadbalancing:RegisterInstancesWithLoadBalancer",
+										"elasticloadbalancing:DeregisterTargets",
+										"elasticloadbalancing:DescribeTargetGroups",
+										"elasticloadbalancing:DescribeTargetHealth",
+										"elasticloadbalancing:RegisterTargets"
+									]
+								}
+							]
+						},
+						"Roles": [
+							{
+								"Ref": "EC2Role"
+							}
+						]
+					}
+				},
+				"AutoScalerToManyPolicy": {
+					"Type": "AWS::IAM::Policy",
+					"DependsOn": [
+						"AutoScalerRole"
+					],
+					"Properties": {
+						"PolicyName": {
+							"Fn::Sub": 
+								"${applicationAssetInsightId}-as-sp-${projectStack}-${deployment}-${subEnvironment}"
+								
+							
+						},
+						"PolicyDocument": {
+							"Statement": [
+								{
+									"Effect": "Allow",
+									"Resource": "*",
+									"Action": [
+										"application-autoscaling:*",
+										"cloudwatch:DescribeAlarms",
+										"cloudwatch:PutMetricAlarm",
+										"ecs:DescribeServices",
+										"ecs:UpdateService"
+									]
+								}
+							]
+						},
+						"Roles": [
+							{
+								"Ref": "AutoScalerRole"
+							}
+						]
+					}
+				}
+			}
+		}	

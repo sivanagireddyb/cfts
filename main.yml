@@ -95,40 +95,43 @@ Mappings:
     us-east-1:
       Ec2Ami: ami-04681a1dbd79675a5
       Abbr: use1
-  use1:  # N Virginia
-   tr-fr-prod:
-     VpcId: vpc-ffae3c99  # tr-vpc-1
-     sgFromBastion: sg-65f42917  # fromBastionSSH
-     s3Bucket: 'arn:aws:s3:::a205069-resources-edp-rt-main-production-use1-tr-fr-prod'
-     CidrIp: '10.62.0.0/16'
-   tr-fr-preprod:
-     VpcId: vpc-0261f464  # tr-vpc-1
-     sgFromBastion: sg-effe239d  # fromBastionSSH
-     s3Bucket: 'arn:aws:s3:::a205069-resources-edp-rt-main-pre-production-use1-tr-fr-preprod'
-     CidrIp: '10.97.0.0/16'
-   tr-fr-sandbox:
-     VpcId: vpc-c451cea2  # tr-vpc-1
-     sgFromBastion: sg-54d20f26  # fromBastionSSH
-     s3Bucket: 'arn:aws:s3:::a205069-resources-edp-rt-main-pre-production-use1-tr-fr-preprod'
-     CidrIp: '10.97.0.0/16'
-
-  euw1:  # Ireland
+      sgFromBastion: sg-effe239d
+  use1:
     tr-fr-prod:
-      VpcId: vpc-12230976  # tr-vpc-1
-      sgFromBastion: sg-e9cad091  # fromBastionSSH
-      s3Bucket: 'arn:aws:s3:::a205069-resources-edp-rt-main-production-euw1-tr-fr-prod'
-      CidrIp: '10.158.0.0/16'
+      VpcId: vpc-ffae3c99
+      sgFromBastion: sg-65f42917
+      s3Bucket: 'arn:aws:s3:::a205069-resources-edp-rt-main-production-use1-tr-fr-prod'
+      CidrIp: 10.62.0.0/16
     tr-fr-preprod:
-      VpcId: vpc-dbbf96bf  # tr-vpc-1
-      sgFromBastion: sg-a3cad0db  # fromBastionSSH
-      s3Bucket: 'arn:aws:s3:::a205069-resources-edp-rt-main-pre-production-euw1-tr-fr-preprod'
-      CidrIp: '10.97.0.0/16'
+      VpcId: vpc-0261f464
+      sgFromBastion: sg-effe239d
+      s3Bucket: >-
+        arn:aws:s3:::a205069-resources-edp-rt-main-pre-production-use1-tr-fr-preprod
+      CidrIp: 10.97.0.0/16
     tr-fr-sandbox:
-      VpcId: vpc-98ab83fc  # tr-vpc-1
-      sgFromBastion: sg-b8d2c8c0  # fromBastionSSH
-      s3Bucket: 'arn:aws:s3:::a205069-resources-edp-rt-main-pre-production-euw1-tr-fr-preprod'
-      CidrIp: '10.97.0.0/16'
-
+      VpcId: vpc-c451cea2
+      sgFromBastion: sg-54d20f26
+      s3Bucket: >-
+        arn:aws:s3:::a205069-resources-edp-rt-main-pre-production-use1-tr-fr-preprod
+      CidrIp: 10.97.0.0/16
+  euw1:
+    tr-fr-prod:
+      VpcId: vpc-12230976
+      sgFromBastion: sg-e9cad091
+      s3Bucket: 'arn:aws:s3:::a205069-resources-edp-rt-main-production-euw1-tr-fr-prod'
+      CidrIp: 10.158.0.0/16
+    tr-fr-preprod:
+      VpcId: vpc-dbbf96bf
+      sgFromBastion: sg-a3cad0db
+      s3Bucket: >-
+        arn:aws:s3:::a205069-resources-edp-rt-main-pre-production-euw1-tr-fr-preprod
+      CidrIp: 10.97.0.0/16
+    tr-fr-sandbox:
+      VpcId: vpc-98ab83fc
+      sgFromBastion: sg-b8d2c8c0
+      s3Bucket: >-
+        arn:aws:s3:::a205069-resources-edp-rt-main-pre-production-euw1-tr-fr-preprod
+      CidrIp: 10.97.0.0/16
   EC2Properties:
     t2.micro:
       CpuUnits: '1024'
@@ -140,159 +143,208 @@ Mappings:
       CpuUnits: '8192'
     m5.4xlarge:
       CpuUnits: '10240'
+  EnvProperties:
+    PRODUCTION:
+      tolower: production
+      abbr: prd
+    PRE-PRODUCTION:
+      tolower: pre-production
+      abbr: pp
+    QUALITY-ASSURANCE:
+      tolower: quality-assurance
+      abbr: qa
+    INTEGRATION-TESTING:
+      tolower: integration-testing
+      abbr: it
+    DEVELOPMENT:
+      tolower: development
+      abbr: dev
+    LAB:
+      tolower: lab
+      abbr: lab
 Conditions:
   HasVpcId: !Not 
     - !Equals 
       - !Ref VpcId
       - ''
 Resources:
-  # -------------------------------------------------------------------------
-  # Identity & Access Management (IAM) related Resources
-  # -------------------------------------------------------------------------
-
   EC2InstanceProfile:
-    Type: AWS::IAM::InstanceProfile
+    Type: 'AWS::IAM::InstanceProfile'
     DependsOn:
-    - EC2Role
-    - AccessToElbPolicy
-    - AccessToCWPolicy
-    - AccessToCWLogsPolicy
+      - EC2Role
+      - AccessToElbPolicy
+      - AccessToCWPolicy
+      - AccessToCWLogsPolicy
     Properties:
-      Path: '/service-role/'
+      Path: /service-role/
       Roles:
-      - !Ref EC2Role
-
-
+        - !Ref EC2Role
   EC2Role:
-    Type: AWS::IAM::Role
+    Type: 'AWS::IAM::Role'
     Properties:
-      RoleName: !Sub
-      - "a${applicationAssetInsightId}-ec2-${projectStack}--${deployment}-${subEnvironment}-${EnvAbbr}-${RegAbbr}"
-      - { EnvAbbr: !FindInMap [EnvProperties, !Ref environment, abbr],
-          RegAbbr: !FindInMap [RegionProperties, !Ref "AWS::Region", Abbr] }
-      Path: '/LaunchConfig-role/'
+      RoleName: !Sub 
+        - >-
+          a${applicationAssetInsightId}-ec2-${projectStack}--${deployment}-${subEnvironment}-${EnvAbbr}-${RegAbbr}
+        - EnvAbbr: !FindInMap 
+            - EnvProperties
+            - !Ref environment
+            - abbr
+          RegAbbr: !FindInMap 
+            - RegionProperties
+            - !Ref 'AWS::Region'
+            - Abbr
+      Path: /LaunchConfig-role/
       AssumeRolePolicyDocument:
         Statement:
-        - Effect: Allow
-          Action: ['sts:AssumeRole']
-          Principal:
-            Service: ['ec2.amazonaws.com']
-
+          - Effect: Allow
+            Action:
+              - 'sts:AssumeRole'
+            Principal:
+              Service:
+                - ec2.amazonaws.com
   AutoScalerRole:
-    Type: AWS::IAM::Role
-    Condition: AllResources
+    Type: 'AWS::IAM::Role'
     Properties:
-      RoleName: !Sub
-      - "a${applicationAssetInsightId}-as-${projectStack}-${deployment}-${subEnvironment}-${EnvAbbr}-${RegAbbr}"
-      - { EnvAbbr: !FindInMap [EnvProperties, !Ref environment, abbr],
-          RegAbbr: !FindInMap [RegionProperties, !Ref "AWS::Region", Abbr] }
-      Path: '/LaunchConfig-role/'
+      RoleName: !Sub 
+        - >-
+          a${applicationAssetInsightId}-as-${projectStack}-${deployment}-${subEnvironment}-${EnvAbbr}-${RegAbbr}
+        - EnvAbbr: !FindInMap 
+            - EnvProperties
+            - !Ref environment
+            - abbr
+          RegAbbr: !FindInMap 
+            - RegionProperties
+            - !Ref 'AWS::Region'
+            - Abbr
+      Path: /LaunchConfig-role/
       AssumeRolePolicyDocument:
         Statement:
-        - Effect: Allow
-          Action: ['sts:AssumeRole']
-          Principal:
-            Service: ['application-autoscaling.amazonaws.com']
-
- 
-  # Policy to allow EC2 (ecs-agent) to pull images from the ECR
+          - Effect: Allow
+            Action:
+              - 'sts:AssumeRole'
+            Principal:
+              Service:
+                - application-autoscaling.amazonaws.com
   AccessToCWPolicy:
-    Type: AWS::IAM::Policy
-    DependsOn: [EC2Role]
+    Type: 'AWS::IAM::Policy'
+    DependsOn:
+      - EC2Role
     Properties:
-      PolicyName: !Sub
-      - "a${applicationAssetInsightId}-cw-sp-${projectStack}-${deployment}-${subEnvironment}-${EnvAbbr}-${RegAbbr}"
-      - { EnvAbbr: !FindInMap [EnvProperties, !Ref environment, abbr],
-          RegAbbr: !FindInMap [RegionProperties, !Ref "AWS::Region", Abbr] }
+      PolicyName: !Sub 
+        - >-
+          a${applicationAssetInsightId}-cw-sp-${projectStack}-${deployment}-${subEnvironment}-${EnvAbbr}-${RegAbbr}
+        - EnvAbbr: !FindInMap 
+            - EnvProperties
+            - !Ref environment
+            - abbr
+          RegAbbr: !FindInMap 
+            - RegionProperties
+            - !Ref 'AWS::Region'
+            - Abbr
       PolicyDocument:
         Statement:
-        - Effect: Allow
-          Resource: '*'
-          Action:
-          - "cloudwatch:PutMetricData"
-          - "cloudwatch:GetMetricStatistics"
+          - Effect: Allow
+            Resource: '*'
+            Action:
+              - 'cloudwatch:PutMetricData'
+              - 'cloudwatch:GetMetricStatistics'
       Roles:
-      - !Ref EC2Role
-
-  # This matches Amazon's CloudWatchAgentServerPolicy
-  # Allows Amazon-CloudWatch-Agent (on the ads ec2) to push ads logs to CloudWatch
-  # this agent is installed and running in the ads-mon Docker container
+        - !Ref EC2Role
   AccessToCWLogsPolicy:
-    Type: AWS::IAM::Policy
-    DependsOn: [EC2Role]
+    Type: 'AWS::IAM::Policy'
+    DependsOn:
+      - EC2Role
     Properties:
-      PolicyName: !Sub
-      - "a${applicationAssetInsightId}-cwlogs-sp-${projectStack}-${deployment}-${subEnvironment}-${EnvAbbr}-${RegAbbr}"
-      - { EnvAbbr: !FindInMap [EnvProperties, !Ref environment, abbr],
-          RegAbbr: !FindInMap [RegionProperties, !Ref "AWS::Region", Abbr] }
+      PolicyName: !Sub 
+        - >-
+          a${applicationAssetInsightId}-cwlogs-sp-${projectStack}-${deployment}-${subEnvironment}-${EnvAbbr}-${RegAbbr}
+        - EnvAbbr: !FindInMap 
+            - EnvProperties
+            - !Ref environment
+            - abbr
+          RegAbbr: !FindInMap 
+            - RegionProperties
+            - !Ref 'AWS::Region'
+            - Abbr
       PolicyDocument:
         Statement:
-        - Effect: Allow
-          Resource: '*'
-          Action:
-          - "cloudwatch:PutMetricData"
-          - "ec2:DescribeTags"
-          - "logs:PutLogEvents"
-          - "logs:DescribeLogStreams"
-          - "logs:DescribeLogGroups"
-          - "logs:CreateLogStream"
-          - "logs:CreateLogGroup"
-        - Effect: Allow
-          Resource: 'arn:aws:ssm:*:*:parameter/AmazonCloudWatch-*'
-          Action:
-          - "ssm:GetParameter"
+          - Effect: Allow
+            Resource: '*'
+            Action:
+              - 'cloudwatch:PutMetricData'
+              - 'ec2:DescribeTags'
+              - 'logs:PutLogEvents'
+              - 'logs:DescribeLogStreams'
+              - 'logs:DescribeLogGroups'
+              - 'logs:CreateLogStream'
+              - 'logs:CreateLogGroup'
+          - Effect: Allow
+            Resource: 'arn:aws:ssm:*:*:parameter/AmazonCloudWatch-*'
+            Action:
+              - 'ssm:GetParameter'
       Roles:
-      - !Ref EC2Role
-
-
+        - !Ref EC2Role
   AccessToElbPolicy:
-    Type: AWS::IAM::Policy
-    DependsOn: [EC2Role]
+    Type: 'AWS::IAM::Policy'
+    DependsOn:
+      - EC2Role
     Properties:
-      PolicyName: !Sub
-      - "a${applicationAssetInsightId}-elb-sp-${projectStack}-${deployment}-${subEnvironment}-${EnvAbbr}-${RegAbbr}"
-      - { EnvAbbr: !FindInMap [EnvProperties, !Ref environment, abbr],
-          RegAbbr: !FindInMap [RegionProperties, !Ref "AWS::Region", Abbr] }
+      PolicyName: !Sub 
+        - >-
+          a${applicationAssetInsightId}-elb-sp-${projectStack}-${deployment}-${subEnvironment}-${EnvAbbr}-${RegAbbr}
+        - EnvAbbr: !FindInMap 
+            - EnvProperties
+            - !Ref environment
+            - abbr
+          RegAbbr: !FindInMap 
+            - RegionProperties
+            - !Ref 'AWS::Region'
+            - Abbr
       PolicyDocument:
-        Version: "2012-10-17"
+        Version: 2012-10-17
         Statement:
-        - Effect: Allow
-          Resource: '*'
-          Action:
-          - "ec2:AuthorizeSecurityGroupIngress"
-          - "ec2:Describe*"
-          - "elasticloadbalancing:DeregisterInstancesFromLoadBalancer"
-          - "elasticloadbalancing:Describe*"
-          - "elasticloadbalancing:RegisterInstancesWithLoadBalancer"
-          - "elasticloadbalancing:DeregisterTargets"
-          - "elasticloadbalancing:DescribeTargetGroups"
-          - "elasticloadbalancing:DescribeTargetHealth"
-          - "elasticloadbalancing:RegisterTargets"
+          - Effect: Allow
+            Resource: '*'
+            Action:
+              - 'ec2:AuthorizeSecurityGroupIngress'
+              - 'ec2:Describe*'
+              - 'elasticloadbalancing:DeregisterInstancesFromLoadBalancer'
+              - 'elasticloadbalancing:Describe*'
+              - 'elasticloadbalancing:RegisterInstancesWithLoadBalancer'
+              - 'elasticloadbalancing:DeregisterTargets'
+              - 'elasticloadbalancing:DescribeTargetGroups'
+              - 'elasticloadbalancing:DescribeTargetHealth'
+              - 'elasticloadbalancing:RegisterTargets'
       Roles:
-      - !Ref EC2Role
-
+        - !Ref EC2Role
   AutoScalerToManyPolicy:
-    Type: AWS::IAM::Policy
-    Condition: AllResources
-    DependsOn: [AutoScalerRole]
+    Type: 'AWS::IAM::Policy'
+    DependsOn:
+      - AutoScalerRole
     Properties:
-      PolicyName: !Sub
-      - "a${applicationAssetInsightId}-as-sp-${projectStack}-${deployment}-${subEnvironment}-${EnvAbbr}-${RegAbbr}"
-      - { EnvAbbr: !FindInMap [EnvProperties, !Ref environment, abbr],
-          RegAbbr: !FindInMap [RegionProperties, !Ref "AWS::Region", Abbr] }
+      PolicyName: !Sub 
+        - >-
+          a${applicationAssetInsightId}-as-sp-${projectStack}-${deployment}-${subEnvironment}-${EnvAbbr}-${RegAbbr}
+        - EnvAbbr: !FindInMap 
+            - EnvProperties
+            - !Ref environment
+            - abbr
+          RegAbbr: !FindInMap 
+            - RegionProperties
+            - !Ref 'AWS::Region'
+            - Abbr
       PolicyDocument:
         Statement:
-        - Effect: Allow
-          Resource: '*'
-          Action:
-          - "application-autoscaling:*"
-          - "cloudwatch:DescribeAlarms"
-          - "cloudwatch:PutMetricAlarm"
-          - "ecs:DescribeServices"
-          - "ecs:UpdateService"
+          - Effect: Allow
+            Resource: '*'
+            Action:
+              - 'application-autoscaling:*'
+              - 'cloudwatch:DescribeAlarms'
+              - 'cloudwatch:PutMetricAlarm'
+              - 'ecs:DescribeServices'
+              - 'ecs:UpdateService'
       Roles:
-      - !Ref AutoScalerRole
-	  
+        - !Ref AutoScalerRole
   ADSSecurityGroup:
     Type: 'AWS::EC2::SecurityGroup'
     Properties:
@@ -310,9 +362,29 @@ Resources:
           - VpcId
       SecurityGroupIngress:
         - IpProtocol: tcp
-          FromPort: 80
-          ToPort: 80
-          CidrIp: 0.0.0.0/16
+          FromPort: 22
+          ToPort: 22
+          CidrIp: !Sub 
+            - '${cidrip}'
+            - cidrip: !FindInMap 
+                - !FindInMap 
+                  - RegionProperties
+                  - !Ref 'AWS::Region'
+                  - Abbr
+                - !Ref account
+                - CidrIp
+        - IpProtocol: tcp
+          FromPort: 14002
+          ToPort: 14002
+          CidrIp: !Sub 
+            - '${cidrip}'
+            - cidrip: !FindInMap 
+                - !FindInMap 
+                  - RegionProperties
+                  - !Ref 'AWS::Region'
+                  - Abbr
+                - !Ref account
+                - CidrIp
   ADSNLB:
     Type: 'AWS::ElasticLoadBalancingV2::LoadBalancer'
     Properties:
@@ -370,10 +442,7 @@ Resources:
     DependsOn: [EC2InstanceProfile, ADSSecurityGroup,ADSNLBTargetGroup]
     Properties:
       Parameters:
-        ImageId: !FindInMap 
-          - RegionProperties
-          - !Ref 'AWS::Region'
-          - Ec2Ami
+        ImageId: !FindInMap [RegionProperties, !Ref "AWS::Region", Ec2Ami] 
         EC2KeyPairName: !Ref EC2KeyPairName
         InstanceType: !Ref InstanceType
         subnetId: !Ref subnetId
@@ -382,8 +451,7 @@ Resources:
         environment: !Ref environment
         ADSSecurityGroup: !Ref ADSSecurityGroup
         ADSNLBTargetGroup: !Ref ADSNLBTargetGroup
-		sgFromBastion:
-		- !FindInMap [!FindInMap [RegionProperties, !Ref "AWS::Region", Abbr], !Ref account, sgFromBastion]
-		EC2InstanceProfile: !Ref EC2InstanceProfile
+        EC2Profile: !Ref EC2InstanceProfile
+        sgFromBastion: !FindInMap [!FindInMap [RegionProperties, !Ref "AWS::Region", Abbr], !Ref account, sgFromBastion]
       TemplateURL: 'https://s3.amazonaws.com/adscfts/Autoscalinggroupstack.json'
       TimeoutInMinutes: '5'

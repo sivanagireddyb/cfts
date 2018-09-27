@@ -22,9 +22,9 @@ Parameters:
     Type: String
   environment:
     Type: String
-  sgFromBastion:
-    Type: String
-  EC2InstanceProfile:
+#  sgFromBastion:
+#    Type: String
+  EC2Profile:
     Type: String
 Resources:
   ADSEc2LaunchConfiguration:
@@ -34,18 +34,9 @@ Resources:
       KeyName: !Ref EC2KeyPairName
       SecurityGroups:
         - !Ref ADSSecurityGroup
-        - !Ref sgFromBastion
       InstanceType: !Ref InstanceType
-      IamInstanceProfile: !Ref EC2InstanceProfile
-      UserData:
-        "Fn::Base64": !Sub
-          - |
-            #!/bin/bash
-            set -x
-            yum update -y
-            yum install -y aws-cfn-bootstrap aws-cli
-            yum update -y ecs-init
-            /opt/aws/bin/cfn-init -v --region ${AWS::Region} --stack ${AWS::StackName} --resource ECSLaunchConfiguration
+      IamInstanceProfile: !Ref EC2Profile
+    
   ADSEC2AutoScalingGroup:
     Type: 'AWS::AutoScaling::AutoScalingGroup'
     Properties:

@@ -1,147 +1,126 @@
 {
-    "AWSTemplateFormatVersion": "2010-09-09",
-    "Description": "Creating Cloud ADS instances",
-    "Metadata": {
-        "CommitHash": "<<GIT_COMMIT_ID>>",
-        "Version": "<<TEMPLATE_VERSION>>"
-    },
-    "Parameters": {
-        "ImageId": {
-            "Type": "String"
-        },
-        "EC2KeyPairName": {
-            "Type": "String"
-        },
-        "InstanceType": {
-            "Type": "String"
-        },
-        "subnetId": {
-            "Type": "String"
-        },
-        "projectStack": {
-            "Type": "String"
-        },
-        "account": {
-            "Type": "String"
-        },
-        "ADSSecurityGroup": {
-            "Type": "String"
-        },
-        "ADSNLBTargetGroup": {
-            "Type": "String"
-        },
-        "environment": {
-            "Type": "String"
-        },
-        "sgFromBastion": {
-            "Type": "String"
-        },
-        "EC2InstanceProfile": {
-            "Type": "String"
-        }
-    },
-    "Resources": {
-        "ADSEc2LaunchConfiguration": {
-            "Type": "AWS::AutoScaling::LaunchConfiguration",
-            "Properties": {
-                "ImageId": {
-                    "Ref": "ImageId"
-                },
-                "KeyName": {
-                    "Ref": "EC2KeyPairName"
-                },
-                "SecurityGroups": [
+	"AWSTemplateFormatVersion": "2010-09-09",
+	"Description": "Creating Cloud ADS instances",
+	"Metadata": {
+		"CommitHash": "<<GIT_COMMIT_ID>>",
+		"Version": "<<TEMPLATE_VERSION>>"
+	},
+	"Parameters": {
+		"ImageId": {
+			"Type": "String"
+		},
+		"EC2KeyPairName": {
+			"Type": "String"
+		},
+		"InstanceType": {
+			"Type": "String"
+		},
+		"subnetId": {
+			"Type": "String"
+		},
+		"projectStack": {
+			"Type": "String"
+		},
+		"account": {
+			"Type": "String"
+		},
+		"ADSSecurityGroup": {
+       	    "Type": "String"
+	    },
+		"ADSNLBTargetGroup": {
+			 "Type": "String"	
+			        },
+		"environment": {
+			"Type": "String"
+		}
+	},
+
+	"Resources": {
+		"ADSEc2LaunchConfiguration": {
+			"Type": "AWS::AutoScaling::LaunchConfiguration",
+			"Properties": {
+				"ImageId": {
+					"Ref": "ImageId"
+				},
+				"KeyName": {
+					"Ref": "EC2KeyPairName"
+				},
+				"SecurityGroups": [
                     {
                         "Ref": "ADSSecurityGroup"
-                    },
-                    {
-                        "Ref": "sgFromBastion"
                     }
                 ],
-                "InstanceType": {
-                    "Ref": "InstanceType"
-                },
-                "IamInstanceProfile": {
-                    "Ref": "EC2InstanceProfile"
-                },
-                "UserData": {
-                    "Fn::Base64": {
-                        "Fn::Sub": [
-                            "#!/bin/bash\nset -x\nyum update -y\nyum install -y aws-cfn-bootstrap aws-cli\nyum update -y ecs-init\n/opt/aws/bin/cfn-init -v --region ${AWS::Region} --stack ${AWS::StackName} --resource ECSLaunchConfiguration\n"
-                        ]
-                    }
-                }
-            }
-        },
-        "ADSEC2AutoScalingGroup": {
-            "Type": "AWS::AutoScaling::AutoScalingGroup",
-            "Properties": {
-                "VPCZoneIdentifier": [
-                    {
-                        "Ref": "subnetId"
-                    }
-                ],
-                "LaunchConfigurationName": {
-                    "Ref": "ADSEc2LaunchConfiguration"
-                },
-                "MinSize": 4,
-                "MaxSize": 5,
-                "DesiredCapacity": 5,
-                "HealthCheckGracePeriod": 300,
-                "TargetGroupARNs": [
-                    {
-                        "Ref": "ADSNLBTargetGroup"
-                    }
-                ],
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": [
-                                "${StackName}-NLB",
-                                {
-                                    "StackName": {
-                                        "Ref": "AWS::StackName"
-                                    }
-                                }
-                            ]
-                        },
-                        "PropagateAtLaunch": true
-                    }
-                ]
-            },
-            "UpdatePolicy": {
-                "AutoScalingScheduledAction": {
-                    "IgnoreUnmodifiedGroupSizeProperties": "true"
-                },
-                "AutoScalingRollingUpdate": {
-                    "MinInstancesInService": "4",
-                    "MaxBatchSize": "5",
-                    "PauseTime": "PT59M",
-                    "WaitOnResourceSignals": "true"
-                }
-            }
-        },
-        "CPUAlarm": {
-            "Type": "AWS::CloudWatch::Alarm",
-            "Properties": {
-                "AlarmDescription": "CPU alarm for my instance",
-                "MetricName": "CPUUtilization",
-                "Namespace": "AWS/NetworkELB",
-                "Statistic": "Average",
-                "Period": "60",
-                "EvaluationPeriods": "3",
-                "Threshold": "90",
-                "ComparisonOperator": "GreaterThanOrEqualToThreshold",
-                "Dimensions": [
-                    {
-                        "Name": "AutoScalingGroupName",
-                        "Value": {
-                            "Ref": "ADSEC2AutoScalingGroup"
-                        }
-                    }
-                ]
-            }
-        }
-    }
+				"InstanceType": {
+					"Ref": "InstanceType"
+				}
+			}
+		},
+		"ADSEC2AutoScalingGroup": {
+			"Type": "AWS::AutoScaling::AutoScalingGroup",
+			"Properties": {
+				"VPCZoneIdentifier": [{
+					"Ref": "subnetId"
+				}],
+				"LaunchConfigurationName": {
+					"Ref": "ADSEc2LaunchConfiguration"
+					},
+				
+				"MinSize": 4,
+				"MaxSize": 5,
+				"DesiredCapacity": 4,
+				"HealthCheckGracePeriod": 300,
+				"TargetGroupARNs": [{ 
+					    "Ref": "ADSNLBTargetGroup"
+				}],
+				"Tags": [{
+					"Key": "Name",
+					"Value": {
+						"Fn::Sub": [
+							"${StackName}-NLB",
+							{
+								"StackName": {
+									"Ref": "AWS::StackName"
+								}
+							}
+						]
+					},
+					"PropagateAtLaunch": true
+				}]
+			},
+
+
+			"UpdatePolicy": {
+				"AutoScalingScheduledAction": {
+					"IgnoreUnmodifiedGroupSizeProperties": "true"
+				},
+				"AutoScalingRollingUpdate": {
+					"MinInstancesInService": "4",
+					"MaxBatchSize": "5",
+					"PauseTime": "PT59M",
+					"WaitOnResourceSignals": "true"
+				}
+			}
+		},
+
+		"CPUAlarm": {
+			"Type": "AWS::CloudWatch::Alarm",
+			"Properties": {
+				"AlarmDescription": "CPU alarm for my instance",
+				"MetricName": "CPUUtilization",
+				"Namespace": "AWS/NetworkELB",
+				"Statistic": "Average",
+				"Period": "60",
+				"EvaluationPeriods": "3",
+				"Threshold": "90",
+				"ComparisonOperator": "GreaterThanOrEqualToThreshold",
+				"Dimensions": [{
+					"Name": "AutoScalingGroupName",
+					"Value": {
+						"Ref": "ADSEC2AutoScalingGroup"
+					}
+				}]
+			}
+		}
+
+	}
 }

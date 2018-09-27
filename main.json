@@ -1,826 +1,497 @@
 {
-    "AWSTemplateFormatVersion": "2010-09-09",
-    "Description": "Creating Cloud ADS instances",
-    "Metadata": {
-        "CommitHash": "<<GIT_COMMIT_ID>>",
-        "Version": "<<TEMPLATE_VERSION>>"
-    },
-    "Parameters": {
-        "projectStack": {
-            "Description": "Project name [default edp-rt] (lowercase alphanumeric)",
-            "Type": "String",
-            "Default": "edp-rt",
-            "MinLength": 1,
-            "AllowedPattern": "^[a-z0-9-]*$"
-        },
-        "account": {
-            "Description": "Choose which TR account should be deployed to",
-            "Type": "String",
-            "Default": "tr-fr-preprod",
-            "AllowedValues": [
-                "tr-fr-sandbox",
-                "tr-fr-preprod",
-                "tr-fr-prod"
-            ]
-        },
-        "environment": {
-            "Description": "tr:environment, tr:environment-type",
-            "Type": "String",
-            "Default": "DEVELOPMENT",
-            "AllowedValues": [
-                "PRODUCTION",
-                "PRE-PRODUCTION",
-                "QUALITY-ASSURANCE",
-                "INTEGRATION-TESTING",
-                "DEVELOPMENT",
-                "LAB"
-            ]
-        },
-        "subEnvironment": {
-            "Description": "tr:sub-environment",
-            "Type": "String",
-            "Default": "tjd",
-            "MinLength": 1,
-            "MaxLength": 9,
-            "AllowedPattern": "^[a-z0-9-]*$"
-        },
-        "deployment": {
-            "Description": "Deployment (blue|green) and deployment version (#) e.g. 'blue-1'",
-            "Type": "String",
-            "Default": "blue-1",
-            "MinLength": 6,
-            "AllowedPattern": "^[a-z0-9]*-[0-9]*$"
-        },
-        "financialIdentifier": {
-            "Description": "tr:financial-identifier",
-            "Type": "String",
-            "Default": 283711002,
-            "AllowedPattern": "^[0-9]*$"
-        },
-        "applicationAssetInsightId": {
-            "Description": "tr:application-asset-insight-id",
-            "Type": "String",
-            "Default": 205069,
-            "AllowedPattern": "^[0-9]*$"
-        },
-        "resourceOwner": {
-            "Description": "tr:resource-owner - email address",
-            "Type": "String",
-            "Default": "divya.vedhire@thomsonreuters.com",
-            "MinLength": 1
-        },
-        "VpcId": {
-            "Description": "which VPC this should be deployed to",
-            "Type": "String",
-            "Default": "vpc-0261f464"
-        },
-        "subnetId": {
-            "Description": "Subnet ID for the private subnet",
-            "Type": "String",
-            "Default": "subnet-86febcab"
-        },
-        "privateSubnets": {
-            "Description": "Choose which subnets this should be deployed to",
-            "Type": "List<AWS::EC2::Subnet::Id>",
-            "Default": "subnet-86febcab"
-        },
-        "InstanceType": {
-            "Description": "Which instance type should we use to build",
-            "Type": "String",
-            "AllowedValues": [
-                "t2.micro",
-                "m5.large",
-                "m5.xlarge",
-                "m5.2xlarge",
-                "m5.4xlarge"
-            ]
-        },
-        "EC2KeyPairName": {
-            "Description": "Key-pair name used for SSH access to ADS hosts",
-            "Type": "String",
-            "Default": ""
-        },
-        "EC2AuthKey": {
-            "Description": "String to append to authorized_keys (disabled for prod env)",
-            "Type": "String",
-            "Default": "",
-            "NoEcho": true
-        }
-    },
-    "Mappings": {
-        "RegionProperties": {
-            "eu-west-1": {
-                "Ec2Ami": "ami-0bdb1d6c15a40392c",
-                "Abbr": "euw1"
-            },
-            "us-east-1": {
-                "Ec2Ami": "ami-04681a1dbd79675a5",
-                "Abbr": "use1"
-            }
-        },
-        "use1": {
-            "tr-fr-prod": {
-                "VpcId": "vpc-ffae3c99",
-                "sgFromBastion": "sg-65f42917",
-                "s3Bucket": "arn:aws:s3:::a205069-resources-edp-rt-main-production-use1-tr-fr-prod",
-                "CidrIp": "10.62.0.0/16"
-            },
-            "tr-fr-preprod": {
-                "VpcId": "vpc-0261f464",
-                "sgFromBastion": "sg-effe239d",
-                "s3Bucket": "arn:aws:s3:::a205069-resources-edp-rt-main-pre-production-use1-tr-fr-preprod",
-                "CidrIp": "10.97.0.0/16"
-            },
-            "tr-fr-sandbox": {
-                "VpcId": "vpc-c451cea2",
-                "sgFromBastion": "sg-54d20f26",
-                "s3Bucket": "arn:aws:s3:::a205069-resources-edp-rt-main-pre-production-use1-tr-fr-preprod",
-                "CidrIp": "10.97.0.0/16"
-            }
-        },
-        "euw1": {
-            "tr-fr-prod": {
-                "VpcId": "vpc-12230976",
-                "sgFromBastion": "sg-e9cad091",
-                "s3Bucket": "arn:aws:s3:::a205069-resources-edp-rt-main-production-euw1-tr-fr-prod",
-                "CidrIp": "10.158.0.0/16"
-            },
-            "tr-fr-preprod": {
-                "VpcId": "vpc-dbbf96bf",
-                "sgFromBastion": "sg-a3cad0db",
-                "s3Bucket": "arn:aws:s3:::a205069-resources-edp-rt-main-pre-production-euw1-tr-fr-preprod",
-                "CidrIp": "10.97.0.0/16"
-            },
-            "tr-fr-sandbox": {
-                "VpcId": "vpc-98ab83fc",
-                "sgFromBastion": "sg-b8d2c8c0",
-                "s3Bucket": "arn:aws:s3:::a205069-resources-edp-rt-main-pre-production-euw1-tr-fr-preprod",
-                "CidrIp": "10.97.0.0/16"
-            }
-        },
-        "EC2Properties": {
-            "t2.micro": {
-                "CpuUnits": "1024"
-            },
-            "m5.large": {
-                "CpuUnits": "2048"
-            },
-            "m5.xlarge": {
-                "CpuUnits": "4096"
-            },
-            "m5.2xlarge": {
-                "CpuUnits": "8192"
-            },
-            "m5.4xlarge": {
-                "CpuUnits": "10240"
-            }
-        },
-		        "EnvProperties": {
-            "PRODUCTION": {
-                "tolower": "production",
-                "abbr": "prd"
-            },
-            "PRE-PRODUCTION": {
-                "tolower": "pre-production",
-                "abbr": "pp"
-            },
-            "QUALITY-ASSURANCE": {
-                "tolower": "quality-assurance",
-                "abbr": "qa"
-            },
-            "INTEGRATION-TESTING": {
-                "tolower": "integration-testing",
-                "abbr": "it"
-            },
-            "DEVELOPMENT": {
-                "tolower": "development",
-                "abbr": "dev"
-            },
-            "LAB": {
-                "tolower": "lab",
-                "abbr": "lab"
-            }
-        }
-    },
-    "Conditions": {
-        "HasVpcId": {
-            "Fn::Not": [
-                {
-                    "Fn::Equals": [
-                        {
-                            "Ref": "VpcId"
-                        },
-                        ""
-                    ]
-                }
-            ]
-        }
-    },
-    "Resources": {
-        "EC2InstanceProfile": {
-            "Type": "AWS::IAM::InstanceProfile",
-            "DependsOn": [
-                "EC2Role",
-                "AccessToElbPolicy",
-                "AccessToCWPolicy",
-                "AccessToCWLogsPolicy"
-            ],
-            "Properties": {
-                "Path": "/service-role/",
-                "Roles": [
-                    {
-                        "Ref": "EC2Role"
-                    }
-                ]
-            }
-        },
-        "EC2Role": {
-            "Type": "AWS::IAM::Role",
-            "Properties": {
-                "RoleName": {
-                    "Fn::Sub": [
-                        "a${applicationAssetInsightId}-ec2-${projectStack}--${deployment}-${subEnvironment}-${EnvAbbr}-${RegAbbr}",
-                        {
-                            "EnvAbbr": {
-                                "Fn::FindInMap": [
-                                    "EnvProperties",
-                                    {
-                                        "Ref": "environment"
-                                    },
-                                    "abbr"
-                                ]
-                            },
-                            "RegAbbr": {
-                                "Fn::FindInMap": [
-                                    "RegionProperties",
-                                    {
-                                        "Ref": "AWS::Region"
-                                    },
-                                    "Abbr"
-                                ]
-                            }
-                        }
-                    ]
-                },
-                "Path": "/LaunchConfig-role/",
-                "AssumeRolePolicyDocument": {
-                    "Statement": [
-                        {
-                            "Effect": "Allow",
-                            "Action": [
-                                "sts:AssumeRole"
-                            ],
-                            "Principal": {
-                                "Service": [
-                                    "ec2.amazonaws.com"
-                                ]
-                            }
-                        }
-                    ]
-                }
-            }
-        },
-        "AutoScalerRole": {
-            "Type": "AWS::IAM::Role",
-            "Properties": {
-                "RoleName": {
-                    "Fn::Sub": [
-                        "a${applicationAssetInsightId}-as-${projectStack}-${deployment}-${subEnvironment}-${EnvAbbr}-${RegAbbr}",
-                        {
-                            "EnvAbbr": {
-                                "Fn::FindInMap": [
-                                    "EnvProperties",
-                                    {
-                                        "Ref": "environment"
-                                    },
-                                    "abbr"
-                                ]
-                            },
-                            "RegAbbr": {
-                                "Fn::FindInMap": [
-                                    "RegionProperties",
-                                    {
-                                        "Ref": "AWS::Region"
-                                    },
-                                    "Abbr"
-                                ]
-                            }
-                        }
-                    ]
-                },
-                "Path": "/LaunchConfig-role/",
-                "AssumeRolePolicyDocument": {
-                    "Statement": [
-                        {
-                            "Effect": "Allow",
-                            "Action": [
-                                "sts:AssumeRole"
-                            ],
-                            "Principal": {
-                                "Service": [
-                                    "application-autoscaling.amazonaws.com"
-                                ]
-                            }
-                        }
-                    ]
-                }
-            }
-        },
-        "AccessToCWPolicy": {
-            "Type": "AWS::IAM::Policy",
-            "DependsOn": [
-                "EC2Role"
-            ],
-            "Properties": {
-                "PolicyName": {
-                    "Fn::Sub": [
-                        "a${applicationAssetInsightId}-cw-sp-${projectStack}-${deployment}-${subEnvironment}-${EnvAbbr}-${RegAbbr}",
-                        {
-                            "EnvAbbr": {
-                                "Fn::FindInMap": [
-                                    "EnvProperties",
-                                    {
-                                        "Ref": "environment"
-                                    },
-                                    "abbr"
-                                ]
-                            },
-                            "RegAbbr": {
-                                "Fn::FindInMap": [
-                                    "RegionProperties",
-                                    {
-                                        "Ref": "AWS::Region"
-                                    },
-                                    "Abbr"
-                                ]
-                            }
-                        }
-                    ]
-                },
-                "PolicyDocument": {
-                    "Statement": [
-                        {
-                            "Effect": "Allow",
-                            "Resource": "*",
-                            "Action": [
-                                "cloudwatch:PutMetricData",
-                                "cloudwatch:GetMetricStatistics"
-                            ]
-                        }
-                    ]
-                },
-                "Roles": [
-                    {
-                        "Ref": "EC2Role"
-                    }
-                ]
-            }
-        },
-        "AccessToCWLogsPolicy": {
-            "Type": "AWS::IAM::Policy",
-            "DependsOn": [
-                "EC2Role"
-            ],
-            "Properties": {
-                "PolicyName": {
-                    "Fn::Sub": [
-                        "a${applicationAssetInsightId}-cwlogs-sp-${projectStack}-${deployment}-${subEnvironment}-${EnvAbbr}-${RegAbbr}",
-                        {
-                            "EnvAbbr": {
-                                "Fn::FindInMap": [
-                                    "EnvProperties",
-                                    {
-                                        "Ref": "environment"
-                                    },
-                                    "abbr"
-                                ]
-                            },
-                            "RegAbbr": {
-                                "Fn::FindInMap": [
-                                    "RegionProperties",
-                                    {
-                                        "Ref": "AWS::Region"
-                                    },
-                                    "Abbr"
-                                ]
-                            }
-                        }
-                    ]
-                },
-                "PolicyDocument": {
-                    "Statement": [
-                        {
-                            "Effect": "Allow",
-                            "Resource": "*",
-                            "Action": [
-                                "cloudwatch:PutMetricData",
-                                "ec2:DescribeTags",
-                                "logs:PutLogEvents",
-                                "logs:DescribeLogStreams",
-                                "logs:DescribeLogGroups",
-                                "logs:CreateLogStream",
-                                "logs:CreateLogGroup"
-                            ]
-                        },
-                        {
-                            "Effect": "Allow",
-                            "Resource": "arn:aws:ssm:*:*:parameter/AmazonCloudWatch-*",
-                            "Action": [
-                                "ssm:GetParameter"
-                            ]
-                        }
-                    ]
-                },
-                "Roles": [
-                    {
-                        "Ref": "EC2Role"
-                    }
-                ]
-            }
-        },
-        "AccessToElbPolicy": {
-            "Type": "AWS::IAM::Policy",
-            "DependsOn": [
-                "EC2Role"
-            ],
-            "Properties": {
-                "PolicyName": {
-                    "Fn::Sub": [
-                        "a${applicationAssetInsightId}-elb-sp-${projectStack}-${deployment}-${subEnvironment}-${EnvAbbr}-${RegAbbr}",
-                        {
-                            "EnvAbbr": {
-                                "Fn::FindInMap": [
-                                    "EnvProperties",
-                                    {
-                                        "Ref": "environment"
-                                    },
-                                    "abbr"
-                                ]
-                            },
-                            "RegAbbr": {
-                                "Fn::FindInMap": [
-                                    "RegionProperties",
-                                    {
-                                        "Ref": "AWS::Region"
-                                    },
-                                    "Abbr"
-                                ]
-                            }
-                        }
-                    ]
-                },
-                "PolicyDocument": {
-                    "Version": "2012-10-17",
-                    "Statement": [
-                        {
-                            "Effect": "Allow",
-                            "Resource": "*",
-                            "Action": [
-                                "ec2:AuthorizeSecurityGroupIngress",
-                                "ec2:Describe*",
-                                "elasticloadbalancing:DeregisterInstancesFromLoadBalancer",
-                                "elasticloadbalancing:Describe*",
-                                "elasticloadbalancing:RegisterInstancesWithLoadBalancer",
-                                "elasticloadbalancing:DeregisterTargets",
-                                "elasticloadbalancing:DescribeTargetGroups",
-                                "elasticloadbalancing:DescribeTargetHealth",
-                                "elasticloadbalancing:RegisterTargets"
-                            ]
-                        }
-                    ]
-                },
-                "Roles": [
-                    {
-                        "Ref": "EC2Role"
-                    }
-                ]
-            }
-        },
-        "AutoScalerToManyPolicy": {
-            "Type": "AWS::IAM::Policy",
-            "DependsOn": [
-                "AutoScalerRole"
-            ],
-            "Properties": {
-                "PolicyName": {
-                    "Fn::Sub": [
-                        "a${applicationAssetInsightId}-as-sp-${projectStack}-${deployment}-${subEnvironment}-${EnvAbbr}-${RegAbbr}",
-                        {
-                            "EnvAbbr": {
-                                "Fn::FindInMap": [
-                                    "EnvProperties",
-                                    {
-                                        "Ref": "environment"
-                                    },
-                                    "abbr"
-                                ]
-                            },
-                            "RegAbbr": {
-                                "Fn::FindInMap": [
-                                    "RegionProperties",
-                                    {
-                                        "Ref": "AWS::Region"
-                                    },
-                                    "Abbr"
-                                ]
-                            }
-                        }
-                    ]
-                },
-                "PolicyDocument": {
-                    "Statement": [
-                        {
-                            "Effect": "Allow",
-                            "Resource": "*",
-                            "Action": [
-                                "application-autoscaling:*",
-                                "cloudwatch:DescribeAlarms",
-                                "cloudwatch:PutMetricAlarm",
-                                "ecs:DescribeServices",
-                                "ecs:UpdateService"
-                            ]
-                        }
-                    ]
-                },
-                "Roles": [
-                    {
-                        "Ref": "AutoScalerRole"
-                    }
-                ]
-            }
-        },
-        "ADSSecurityGroup": {
-            "Type": "AWS::EC2::SecurityGroup",
-            "Properties": {
-                "GroupDescription": "Web server",
-                "GroupName": "ADS-webSecurityGroup",
-                "VpcId": {
-                    "Fn::If": [
-                        "HasVpcId",
-                        {
-                            "Ref": "VpcId"
-                        },
-                        {
-                            "Fn::FindInMap": [
-                                {
-                                    "Fn::FindInMap": [
-                                        "RegionProperties",
-                                        {
-                                            "Ref": "AWS::Region"
-                                        },
-                                        "Abbr"
-                                    ]
-                                },
-                                {
-                                    "Ref": "account"
-                                },
-                                "VpcId"
-                            ]
-                        }
-                    ]
-                },
-                "SecurityGroupIngress": [
-                    {
-                        "IpProtocol": "tcp",
-                        "FromPort": 22,
-                        "ToPort": 22,
-                        "CidrIp": {
-                            "Fn::Sub": [
-                                "${cidrip}",
-                                {
-                                    "cidrip": {
-                                        "Fn::FindInMap": [
-                                            {
-                                                "Fn::FindInMap": [
-                                                    "RegionProperties",
-                                                    {
-                                                        "Ref": "AWS::Region"
-                                                    },
-                                                    "Abbr"
-                                                ]
-                                            },
-                                            {
-                                                "Ref": "account"
-                                            },
-                                            "CidrIp"
-                                        ]
-                                    }
-                                }
-                            ]
-                        }
-					
-                    },
+	"AWSTemplateFormatVersion": "2010-09-09",
+	"Description": "Creating Cloud ADS instances",
+	"Metadata": {
+		"CommitHash": "<<GIT_COMMIT_ID>>",
+		"Version": "<<TEMPLATE_VERSION>>"
+	},
+	"Parameters": {
+		"projectStack": {
+			"Description": "Project name [default edp-rt] (lowercase alphanumeric)",
+			"Type": "String",
+			"Default": "edp-rt",
+			"MinLength": 1,
+			"AllowedPattern": "^[a-z0-9-]*$"
+		},
+		"account": {
+			"Description": "Choose which TR account should be deployed to",
+			"Type": "String",
+			"Default": "tr-fr-preprod",
+			"AllowedValues": [
+				"tr-fr-sandbox",
+				"tr-fr-preprod",
+				"tr-fr-prod"
+			]
+		},
+		"environment": {
+			"Description": "tr:environment, tr:environment-type",
+			"Type": "String",
+			"Default": "DEVELOPMENT",
+			"AllowedValues": [
+				"PRODUCTION",
+				"PRE-PRODUCTION",
+				"QUALITY-ASSURANCE",
+				"INTEGRATION-TESTING",
+				"DEVELOPMENT",
+				"LAB"
+			]
+		},
+		"subEnvironment": {
+			"Description": "tr:sub-environment",
+			"Type": "String",
+			"Default": "tjd",
+			"MinLength": 1,
+			"MaxLength": 9,
+			"AllowedPattern": "^[a-z0-9-]*$"
+		},
+		"deployment": {
+			"Description": "Deployment (blue|green) and deployment version (#) e.g. 'blue-1'",
+			"Type": "String",
+			"Default": "blue-1",
+			"MinLength": 6,
+			"AllowedPattern": "^[a-z0-9]*-[0-9]*$"
+		},
+		"financialIdentifier": {
+			"Description": "tr:financial-identifier",
+			"Type": "String",
+			"Default": 283711002,
+			"AllowedPattern": "^[0-9]*$"
+		},
+		"applicationAssetInsightId": {
+			"Description": "tr:application-asset-insight-id",
+			"Type": "String",
+			"Default": 205069,
+			"AllowedPattern": "^[0-9]*$"
+		},
+		"resourceOwner": {
+			"Description": "tr:resource-owner - email address",
+			"Type": "String",
+			"Default": "divya.vedhire@thomsonreuters.com",
+			"MinLength": 1
+		},
+		"VpcId": {
+			"Description": "which VPC this should be deployed to",
+			"Type": "String",
+			"Default": "vpc-0261f464"
+		},
+		"subnetId": {
+			"Description": "Subnet ID for the private subnet",
+			"Type": "String",
+			"Default": "subnet-86febcab"
+		},
+		"privateSubnets": {
+			"Description": "Choose which subnets this should be deployed to",
+			"Type": "List<AWS::EC2::Subnet::Id>",
+			"Default": "subnet-86febcab"
+		},
+		"InstanceType": {
+			"Description": "Which instance type should we use to build",
+			"Type": "String",
+			"AllowedValues": [
+				"t2.micro",
+				"m5.large",
+				"m5.xlarge",
+				"m5.2xlarge",
+				"m5.4xlarge"
+			]
+		},
+		"EC2KeyPairName": {
+			"Description": "Key-pair name used for SSH access to ADS hosts",
+			"Type": "String",
+			"Default": ""
+		},
+		"EC2AuthKey": {
+			"Description": "String to append to authorized_keys (disabled for prod env)",
+			"Type": "String",
+			"Default": "",
+			"NoEcho": true
+		}
+	},
+	"Mappings": {
+		"RegionProperties": {
+			"eu-west-1": {
+				"Ec2Ami": "ami-0bdb1d6c15a40392c",
+				"Abbr": "euw1"
+			},
+			"us-east-1": {
+				"Ec2Ami": "ami-04681a1dbd79675a5",
+				"Abbr": "use1"
+			}
+		},
+		"use1": {
+			"tr-fr-prod": {
+				"VpcId": "vpc-ffae3c99",
+				"CidrIp": "10.62.0.0/16",
+				"sgFromBastion": "sg-65f42917"
+
+			},
+			"tr-fr-preprod": {
+				"VpcId": "vpc-0261f464",
+				"CidrIp": "10.97.0.0/16",
+				"sgFromBastion": "sg-65f42917"
+
+			},
+			"tr-fr-sandbox": {
+				"VpcId": "vpc-c451cea2",
+				"CidrIp": "10.97.0.0/16",
+				"sgFromBastion": "sg-65f42917"
+
+			}
+		},
+		"euw1": {
+			"tr-fr-prod": {
+				"VpcId": "vpc-12230976",
+				"CidrIp": "10.158.0.0/16"
+			},
+			"tr-fr-preprod": {
+				"VpcId": "vpc-dbbf96bf",
+				"CidrIp": "10.97.0.0/16"
+			},
+			"tr-fr-sandbox": {
+				"VpcId": "vpc-98ab83fc",
+				"CidrIp": "10.97.0.0/16"
+			}
+		},
+		"EnvProperties": {
+			"PRODUCTION": {
+				"tolower": "production",
+				"abbr": "prd"
+			},
+			"PRE-PRODUCTION": {
+				"tolower": "pre-production",
+				"abbr": "pp"
+			},
+			"QUALITY-ASSURANCE": {
+				"tolower": "quality-assurance",
+				"abbr": "qa"
+			},
+			"INTEGRATION-TESTING": {
+				"tolower": "integration-testing",
+				"abbr": "it"
+			},
+			"DEVELOPMENT": {
+				"tolower": "development",
+				"abbr": "dev"
+			},
+			"LAB": {
+				"tolower": "lab",
+				"abbr": "lab"
+			}
+
+		},
+		"EC2Properties": {
+			"t2.micro": {
+				"CpuUnits": "1024"
+			},
+			"m5.large": {
+				"CpuUnits": "2048"
+			},
+			"m5.xlarge": {
+				"CpuUnits": "4096"
+			},
+			"m5.2xlarge": {
+				"CpuUnits": "8192"
+			},
+			"m5.4xlarge": {
+				"CpuUnits": "10240"
+			}
+		}
+	},
+	"Conditions": {
+		"HasVpcId": {
+			"Fn::Not": [{
+				"Fn::Equals": [{
+						"Ref": "VpcId"
+					},
+					""
+				]
+			}]
+		}
+	},
+	"Resources": {
+		"ADSSecurityGroup": {
+			"Type": "AWS::EC2::SecurityGroup",
+			"Properties": {
+				"GroupDescription": "Web server",
+				"GroupName": "ADS-webSecurityGroup",
+				"VpcId": {
+					"Fn::If": [
+						"HasVpcId",
+						{
+							"Ref": "VpcId"
+						},
+						{
+							"Fn::FindInMap": [{
+									"Fn::FindInMap": [
+										"RegionProperties",
+										{
+											"Ref": "AWS::Region"
+										},
+										"Abbr"
+									]
+								},
+								{
+									"Ref": "account"
+								},
+								"VpcId"
+							]
+						}
+					]
+				},
+				"SecurityGroupIngress": [{
+						"IpProtocol": "tcp",
+						"FromPort": 22,
+						"ToPort": 22,
+						"CidrIp": {
+							"Fn::Sub": [
+								"${cidrip}",
+								{
+									"cidrip": {
+										"Fn::FindInMap": [{
+												"Fn::FindInMap": [
+													"RegionProperties",
+													{
+														"Ref": "AWS::Region"
+													},
+													"Abbr"
+												]
+											},
+											{
+												"Ref": "account"
+											},
+											"CidrIp"
+										]
+									}
+								}
+							]
+						}
+
+					},
 					{
-                        "IpProtocol": "tcp",
-                        "FromPort": 14002 ,
-                        "ToPort": 14002,
-                        "CidrIp": {
-                            "Fn::Sub": [
-                                "${cidrip}",
-                                {
-                                    "cidrip": {
-                                        "Fn::FindInMap": [
-                                            {
-                                                "Fn::FindInMap": [
-                                                    "RegionProperties",
-                                                    {
-                                                        "Ref": "AWS::Region"
-                                                    },
-                                                    "Abbr"
-                                                ]
-                                            },
-                                            {
-                                                "Ref": "account"
-                                            },
-                                            "CidrIp"
-                                        ]
-                                    }
-                                }
-                            ]
-                        }
-                    }
-                ]
-            }
-        },
-        "ADSNLB": {
-            "Type": "AWS::ElasticLoadBalancingV2::LoadBalancer",
-            "Properties": {
-                "Type": "network",
-                "Name": {
-                    "Fn::Sub": [
-                        "${StackName}-nlb",
-                        {
-                            "StackName": {
-                                "Ref": "AWS::StackName"
-                            }
-                        }
-                    ]
-                },
-                "Scheme": "internal",
-                "Subnets": [
-                    {
-                        "Ref": "subnetId"
-                    }
-                ],
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": {
-                            "Fn::Sub": [
-                                "${StackName}-ADS-alb",
-                                {
-                                    "StackName": {
-                                        "Ref": "AWS::StackName"
-                                    }
-                                }
-                            ]
-                        }
-                    }
-                ]
-            }
-        },
-        "ADSNLBListener": {
-            "Type": "AWS::ElasticLoadBalancingV2::Listener",
-            "Properties": {
-                "DefaultActions": [
-                    {
-                        "Type": "forward",
-                        "TargetGroupArn": {
-                            "Ref": "ADSNLBTargetGroup"
-                        }
-                    }
-                ],
-                "LoadBalancerArn": {
-                    "Ref": "ADSNLB"
-                },
-                "Port": 80,
-                "Protocol": "TCP"
-            }
-        },
-        "ADSNLBTargetGroup": {
-            "Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
-            "Properties": {
-                "HealthCheckIntervalSeconds": 30,
-                "HealthCheckPath": "/",
-                "HealthCheckProtocol": "HTTP",
-                "HealthyThresholdCount": 2,
-                "UnhealthyThresholdCount": 2,
-                "Matcher": {
-                    "HttpCode": "200-399"
-                },
-                "Name": {
-                    "Fn::Sub": [
-                        "${StackName}-http-tg",
-                        {
-                            "StackName": {
-                                "Ref": "AWS::StackName"
-                            }
-                        }
-                    ]
-                },
-                "Port": 80,
-                "Protocol": "TCP",
-                "Tags": [
-                    {
-                        "Key": "Name",
-                        "Value": "alb-tg"
-                    }
-                ],
-                "VpcId": {
-                    "Fn::If": [
-                        "HasVpcId",
-                        {
-                            "Ref": "VpcId"
-                        },
-                        {
-                            "Fn::FindInMap": [
-                                {
-                                    "Fn::FindInMap": [
-                                        "RegionProperties",
-                                        {
-                                            "Ref": "AWS::Region"
-                                        },
-                                        "Abbr"
-                                    ]
-                                },
-                                {
-                                    "Ref": "account"
-                                },
-                                "VpcId"
-                            ]
-                        }
-                    ]
-                }
-            }
-        },
-        "Autoscalinggroupstack": {
-            "Type": "AWS::CloudFormation::Stack",
-            "DependsOn": [
-                "EC2InstanceProfile",
-                "ADSSecurityGroup",
-                "ADSNLBTargetGroup"
-            ],
-            "Properties": {
-                "Parameters": {
-                    "ImageId": {
-                        "Fn::FindInMap": [
-                            "RegionProperties",
-                            {
-                                "Ref": "AWS::Region"
-                            },
-                            "Ec2Ami"
-                        ]
-                    },
-                    "EC2KeyPairName": {
-                        "Ref": "EC2KeyPairName"
-                    },
-                    "InstanceType": {
-                        "Ref": "InstanceType"
-                    },
-                    "subnetId": {
-                        "Ref": "subnetId"
-                    },
-                    "projectStack": {
-                        "Ref": "projectStack"
-                    },
-                    "account": {
-                        "Ref": "account"
-                    },
-                    "environment": {
-                        "Ref": "environment"
-                    },
-                    "ADSSecurityGroup": {
-                        "Ref": "ADSSecurityGroup"
-                    },
-                    "ADSNLBTargetGroup": {
-                        "Ref": "ADSNLBTargetGroup"
-                    },
-                    "EC2InstanceProfile": {
-                        "Ref": "EC2InstanceProfile"
-                    },
-                    "sgFromBastion": [
-                        {
-                            "Fn::FindInMap": [
-                                {
-                                    "Fn::FindInMap": [
-                                        "RegionProperties",
-                                        {
-                                            "Ref": "AWS::Region"
-                                        },
-                                        "Abbr"
-                                    ]
-                                },
-                                {
-                                    "Ref": "account"
-                                },
-                                "sgFromBastion"
-                            ]
-                        }
-                    ]
-                },
-                "TemplateURL": "https://s3.amazonaws.com/adscfts/Autoscalinggroupstack.json",
-                "TimeoutInMinutes": "5"
-            }
-        }
-    }
+						"IpProtocol": "tcp",
+						"FromPort": 14002,
+						"ToPort": 14002,
+						"CidrIp": {
+							"Fn::Sub": [
+								"${cidrip}",
+								{
+									"cidrip": {
+										"Fn::FindInMap": [{
+												"Fn::FindInMap": [
+													"RegionProperties",
+													{
+														"Ref": "AWS::Region"
+													},
+													"Abbr"
+												]
+											},
+											{
+												"Ref": "account"
+											},
+											"CidrIp"
+										]
+									}
+								}
+							]
+						}
+					}
+				]
+			}
+		},
+		"ADSNLB": {
+			"Type": "AWS::ElasticLoadBalancingV2::LoadBalancer",
+			"Properties": {
+				"Type": "network",
+				"Name": {
+					"Fn::Sub": [
+						"${StackName}-nlb",
+						{
+							"StackName": {
+								"Ref": "AWS::StackName"
+							}
+						}
+					]
+				},
+				"Scheme": "internal",
+				"Subnets": [{
+					"Ref": "subnetId"
+				}],
+				"Tags": [{
+					"Key": "Name",
+					"Value": {
+						"Fn::Sub": [
+							"${StackName}-ADS-alb",
+							{
+								"StackName": {
+									"Ref": "AWS::StackName"
+								}
+							}
+						]
+					}
+				}]
+			}
+		},
+		"ADSNLBListener": {
+			"Type": "AWS::ElasticLoadBalancingV2::Listener",
+			"Properties": {
+				"DefaultActions": [{
+					"Type": "forward",
+					"TargetGroupArn": {
+						"Ref": "ADSNLBTargetGroup"
+					}
+				}],
+				"LoadBalancerArn": {
+					"Ref": "ADSNLB"
+				},
+				"Port": 80,
+				"Protocol": "TCP"
+			}
+		},
+		"ADSNLBTargetGroup": {
+			"Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
+			"Properties": {
+				"HealthCheckIntervalSeconds": 30,
+				"HealthCheckPath": "/",
+				"HealthCheckProtocol": "HTTP",
+				"HealthyThresholdCount": 2,
+				"UnhealthyThresholdCount": 2,
+				"Matcher": {
+					"HttpCode": "200-399"
+				},
+				"Name": {
+					"Fn::Sub": [
+						"${StackName}-http-tg",
+						{
+							"StackName": {
+								"Ref": "AWS::StackName"
+							}
+						}
+					]
+				},
+				"Port": 80,
+				"Protocol": "TCP",
+				"Tags": [{
+					"Key": "Name",
+					"Value": "alb-tg"
+				}],
+				"VpcId": {
+					"Fn::If": [
+						"HasVpcId",
+						{
+							"Ref": "VpcId"
+						},
+						{
+							"Fn::FindInMap": [{
+									"Fn::FindInMap": [
+										"RegionProperties",
+										{
+											"Ref": "AWS::Region"
+										},
+										"Abbr"
+									]
+								},
+								{
+									"Ref": "account"
+								},
+								"VpcId"
+							]
+						}
+					]
+				}
+			}
+		},
+
+		"Iampolicies": {
+			"Type": "AWS::CloudFormation::Stack",
+			"Properties": {
+				"Parameters": {
+					"projectStack": {
+						"Ref": "projectStack"
+					},
+					"account": {
+						"Ref": "account"
+					},
+					"environment": {
+						"Ref": "environment"
+					},
+					
+					"subEnvironment": {
+					     "Ref": "subEnvironment"
+					},
+					"applicationAssetInsightId": {
+					     "Ref": "applicationAssetInsightId"
+					},
+					"deployment": {
+					     "Ref": "deployment"
+					},
+					"EnvAbbr": {
+						"Fn::FindInMap": [
+							"EnvProperties",
+								{
+									"Ref": "environment"
+								},
+									"abbr"
+							]
+						},
+					"RegAbbr": {
+					   "Fn::FindInMap": [
+					       "RegionProperties",
+					      {
+						    "Ref": "AWS::Region"
+						  },
+						    "Abbr"
+							]
+						}
+				},
+				"TemplateURL": "https://s3.amazonaws.com/adscfts/Iampolicies.json",
+				"TimeoutInMinutes": "5"
+			}
+		},
+		"Autoscalinggroupstack": {
+			"Type": "AWS::CloudFormation::Stack",
+			"DependsOn": "ADSNLBTargetGroup",
+			"Properties": {
+				"Parameters": {
+					"ImageId": {
+						"Fn::FindInMap": [
+							"RegionProperties",
+							{
+								"Ref": "AWS::Region"
+							},
+							"Ec2Ami"
+						]
+					},
+					"EC2KeyPairName": {
+						"Ref": "EC2KeyPairName"
+					},
+					"InstanceType": {
+						"Ref": "InstanceType"
+					},
+					"subnetId": {
+						"Ref": "subnetId"
+					},
+					"projectStack": {
+						"Ref": "projectStack"
+					},
+					"account": {
+						"Ref": "account"
+					},
+					"environment": {
+						"Ref": "environment"
+					},
+					"ADSSecurityGroup": {
+						"Ref": "ADSSecurityGroup"
+					},
+					"ADSNLBTargetGroup": {
+						"Ref": "ADSNLBTargetGroup"
+					}
+					
+				},
+				"TemplateURL": "https://s3.amazonaws.com/adscfts/Autoscalinggroupstack.json",
+				"TimeoutInMinutes": "5"
+			}
+		}
+
+	}
+
 }
