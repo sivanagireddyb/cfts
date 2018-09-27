@@ -122,19 +122,19 @@
 			"tr-fr-prod": {
 				"VpcId": "vpc-ffae3c99",
 				"CidrIp": "10.62.0.0/16",
-				"sgFromBastion": "sg-65f42917"
+				"sgFromBastion": "sg-a71a20eb"
 
 			},
 			"tr-fr-preprod": {
 				"VpcId": "vpc-0261f464",
 				"CidrIp": "10.97.0.0/16",
-				"sgFromBastion": "sg-65f42917"
+				"sgFromBastion": "sg-a71a20eb"
 
 			},
 			"tr-fr-sandbox": {
 				"VpcId": "vpc-c451cea2",
 				"CidrIp": "10.97.0.0/16",
-				"sgFromBastion": "sg-65f42917"
+				"sgFromBastion": "sg-a71a20eb"
 
 			}
 		},
@@ -424,6 +424,7 @@
 					"deployment": {
 					     "Ref": "deployment"
 					},
+
 					"EnvAbbr": {
 						"Fn::FindInMap": [
 							"EnvProperties",
@@ -482,6 +483,24 @@
 					"ADSSecurityGroup": {
 						"Ref": "ADSSecurityGroup"
 					},
+				    "sgFromBastion":
+					{
+                        "Fn::FindInMap": [
+                            {
+                                "Fn::FindInMap": [
+                                    "RegionProperties",
+                                    {
+                                        "Ref": "AWS::Region"
+                                    },
+                                    "Abbr"
+                                ]
+                            },
+                            {
+                                "Ref": "account"
+                            },
+                            "sgFromBastion"
+                        ]
+                    },
 					"ADSNLBTargetGroup": {
 						"Ref": "ADSNLBTargetGroup"
 					}

@@ -32,6 +32,9 @@
 			        },
 		"environment": {
 			"Type": "String"
+		},
+		"sgFromBastion":{
+			"Type": "String"
 		}
 	},
 
@@ -50,11 +53,28 @@
 				"SecurityGroups": [
                     {
                         "Ref": "ADSSecurityGroup"
-                    }
+                    },
+					{
+					   "Ref": "sgFromBastion"
+					}
                 ],
+				
 				"InstanceType": {
 					"Ref": "InstanceType"
-				}
+				},
+               "UserData" : { "Fn::Base64" : { "Fn::Join" : ["", [
+						"#!/bin/bash -xe\n",
+						"yum install -y aws-cfn-bootstrap\n",
+						"# Install the files and packages from the metadata\n",
+						"/opt/aws/bin/cfn-init -v ",
+						"         --stack ", { "Ref" : "AWS::StackName" },
+						"         --resource WebServerInstance ",
+						"         --configsets Install ",
+						"         --region ", { "Ref" : "AWS::Region" }, "\n"  
+                         ]
+		              ]
+		           }
+		        }
 			}
 		},
 		"ADSEC2AutoScalingGroup": {
