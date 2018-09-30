@@ -1,0 +1,339 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: Network Load balancer with ADS, Roles and Policies included as nested stacks
+
+Metadata:
+  CommitHash: <<GIT_COMMIT_ID>>
+  Version: <<TEMPLATE_VERSION>>
+
+Parameters:
+  project:
+    Description: 'Project name [default edp-rt] (lowercase alphanumeric)'
+    Type: String
+    Default: edp-rt
+    MinLength: 1
+    AllowedPattern: '^[a-z0-9-]*$'
+  account:
+    Description: Choose which TR account should be deployed to
+    Type: String
+    Default: tr-fr-preprod
+    AllowedValues:
+      - tr-fr-sandbox
+      - tr-fr-preprod
+      - tr-fr-prod
+  environment:
+    Description: 'tr:environment, tr:environment-type'
+    Type: String
+    Default: DEVELOPMENT
+    AllowedValues:
+      - PRODUCTION
+      - PRE-PRODUCTION
+      - QUALITY-ASSURANCE
+      - INTEGRATION-TESTING
+      - DEVELOPMENT
+      - LAB
+  subEnvironment:
+    Description: 'tr:sub-environment'
+    Type: String
+    Default: tjd
+    MinLength: 1
+    MaxLength: 9
+    AllowedPattern: '^[a-z0-9-]*$'
+  service:
+    Description: Service level (standard, premium-az1 or premium-az2)
+    Type: String
+    MinLength: 1
+    AllowedValues:
+    - 'standard'
+    - 'premium-az1'
+    - 'premium-az2'
+    Default: 'standard'
+  deployment:
+    Description: 'Deployment (blue|green) and deployment version (#) e.g. ''blue-1'''
+    Type: String
+    Default: blue-1
+    MinLength: 6
+    AllowedPattern: '^[a-z0-9]*-[0-9]*$'
+  financialIdentifier:
+    Description: 'tr:financial-identifier'
+    Type: String
+    Default: 283711002
+    AllowedPattern: '^[0-9]*$'
+  assetId:
+    Description: 'tr:application-asset-insight-id'
+    Type: String
+    Default: 205069
+    AllowedPattern: '^[0-9]*$'
+  resourceOwner:
+    Description: 'tr:resourceOwner'
+    Type: String
+    Default: 'divya.vedhire@thomsonreuters.com'
+  VpcId:
+    Description: which VPC this should be deployed to
+    Type: String
+    Default: vpc-0261f464
+  subnetId:
+    Description: Choose which subnets this should be deployed to
+    Type: String
+    # TODO temporary default value
+    Default: subnet-86febcab
+  InstanceType:
+    Description: Which instance type should we use to build
+    Type: String
+    # TODO expand this list
+    AllowedValues:
+      - t2.micro
+      - m5.large
+      - m5.xlarge
+      - m5.2xlarge
+      - m5.4xlarge
+    # TODO change default to desired production value
+    Default: m5.large
+  EC2KeyPairName:
+    Description: Key-pair name used for SSH access to ADS hosts
+    Type: String
+    Default: ''
+  EC2AuthKey:
+    Description: String to append to authorized_keys (disabled for prod env)
+    Type: String
+    Default: ''
+    NoEcho: true
+  SSHBastionUser:
+    Description: Bastion 2 user name for SSH access to ADS hosts [205069-PowerUser]
+    Type: String
+    Default: 205069-PowerUser
+    MinLength: 1
+  AvailabilityZone:
+    Description: Adjustments to docker container hostname for cnf parameter scoping
+    Type: String
+    Default: ''
+    AllowedValues:
+    # 3 values used in production (tr-fr-prod)
+    - ''          # standard in eu-west-1
+    - '-az1'      # premium-az1 in us-east-1
+    - '-az2'      # premium-az2 in us-east-1
+    # 3 values used in preprod (tr-fr-preprod)
+    - '-np'       # standard in eu-west-1
+    - '-az1-np'   # premium-az1 in eu-west-1
+    - '-az2-np'   # premium-az2 in eu-west-1
+
+  
+Mappings:
+
+  # RegionProperties:
+  #  TR AMI Lifecycle Policy: https://thehub.thomsonreuters.com/docs/DOC-2333782
+  #  List of TR AMI releases: https://thehub.thomsonreuters.com/docs/DOC-2401050
+  #  List of F&R AMI releases: https://thehub.thomsonreuters.com/groups/nuvola-fr/blog/2018/06/06/list-of-fr-ami-releases
+
+  # Note:
+  #  AMI identifiers are region specific
+  #  only N. Virginia and Ireland have HMDS connectivity (preprod/prod)
+
+  RegionProperties:
+    eu-west-1: # Ireland
+      Ec2Ami: ami-0bdb1d6c15a40392c
+      Abbr: euw1
+    us-east-1: # N. Virginia
+      Ec2Ami: ami-04681a1dbd79675a5
+      Abbr: use1
+
+  use1:  # N Virginia
+   tr-fr-prod:
+     VpcId: vpc-ffae3c99  # tr-vpc-1
+     sgFromBastion: sg-65f42917  # fromBastionSSH
+     s3Bucket: 'arn:aws:s3:::a205069-resources-edp-rt-main-production-use1-tr-fr-prod'
+     CidrIp: '10.62.0.0/16'
+   tr-fr-preprod:
+     VpcId: vpc-0261f464  # tr-vpc-1
+     sgFromBastion: sg-effe239d  # fromBastionSSH
+     s3Bucket: 'arn:aws:s3:::a205069-resources-edp-rt-main-pre-production-use1-tr-fr-preprod'
+     CidrIp: '10.97.0.0/16'
+   tr-fr-sandbox:
+     VpcId: vpc-c451cea2  # tr-vpc-1
+     sgFromBastion: sg-54d20f26  # fromBastionSSH
+     s3Bucket: 'arn:aws:s3:::a205069-resources-edp-rt-main-pre-production-use1-tr-fr-preprod'
+     CidrIp: '10.97.0.0/16'
+
+  euw1:  # Ireland
+    tr-fr-prod:
+      VpcId: vpc-12230976  # tr-vpc-1
+      sgFromBastion: sg-e9cad091  # fromBastionSSH
+      CidrIp: '10.158.0.0/16'
+    tr-fr-preprod:
+      VpcId: vpc-dbbf96bf  # tr-vpc-1
+      sgFromBastion: sg-a3cad0db  # fromBastionSSH
+      CidrIp: '10.97.0.0/16'
+    tr-fr-sandbox:
+      VpcId: vpc-98ab83fc  # tr-vpc-1
+      sgFromBastion: sg-b8d2c8c0  # fromBastionSSH
+      CidrIp: '10.97.0.0/16'
+  
+  # abbr is an abbreviation form of the given evironment (use lower-case)
+  EnvProperties:
+    PRODUCTION:
+      tolower: production
+      abbr: prd
+    PRE-PRODUCTION:
+      tolower: pre-production
+      abbr: pp
+    QUALITY-ASSURANCE:
+      tolower: quality-assurance
+      abbr: qa
+    INTEGRATION-TESTING:
+      tolower: integration-testing
+      abbr: it
+    DEVELOPMENT:
+      tolower: development
+      abbr: dev
+    LAB:
+      tolower: lab
+      abbr: lab
+
+
+Resources:
+  
+  ADSEC2SecurityGroup:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      GroupName: !Sub
+       - "a${assetId}-ec2-sg-${project}-${subEnvironment}-${EnvAbbr}-${RegAbbr}"
+       - { EnvAbbr: !FindInMap [EnvProperties, !Ref environment, abbr],
+          RegAbbr: !FindInMap [RegionProperties, !Ref "AWS::Region", Abbr] }
+      VpcId: !FindInMap [!FindInMap [RegionProperties, !Ref "AWS::Region", Abbr], !Ref account, VpcId]
+      GroupDescription: Access to the EC2 Instances
+      SecurityGroupIngress:
+      - CidrIp: !Sub
+        - "${cidrip}"
+        - { cidrip: !FindInMap [!FindInMap [RegionProperties, !Ref "AWS::Region", Abbr], !Ref account, CidrIp] }
+        IpProtocol: tcp
+        FromPort: 22
+        ToPort: 22
+      - CidrIp: !Sub
+        - "${cidrip}"
+        - { cidrip: !FindInMap [!FindInMap [RegionProperties, !Ref "AWS::Region", Abbr], !Ref account, CidrIp] }
+        IpProtocol: tcp
+        FromPort: 14002
+        ToPort: 14002
+      Tags:
+      - Key: 'tr:resource-name'
+        Value: !Sub ec2-${project}-${subEnvironment}-${environment}-${AWS::Region}-sg
+      - Key: 'Name'
+        Value: !Sub
+        - "a${assetId}-tools-ec2-sg-${project}-${subEnvironment}-${EnvAbbr}-${RegAbbr}"
+        - { EnvAbbr: !FindInMap [EnvProperties, !Ref environment, abbr],
+            RegAbbr: !FindInMap [RegionProperties, !Ref "AWS::Region", Abbr] }
+
+  #Network Load balancer
+  ADSNLB:
+    Type: 'AWS::ElasticLoadBalancingV2::LoadBalancer'
+    Properties:
+       Type: network
+       Name: !Sub 
+        - '${StackName}-nlb'
+        - StackName: !Ref 'AWS::StackName'
+       # This is an internal load balancer which can be launched in private subnets 
+       Scheme: internal
+       Subnets:
+        - !Ref subnetId
+       Tags:
+        - Key: Name
+          Value: !Sub 
+          - "a${assetId}-NLB-${project}-${subEnvironment}-${EnvAbbr}-${RegAbbr}"
+          - { EnvAbbr: !FindInMap [EnvProperties, !Ref environment, abbr],
+              RegAbbr: !FindInMap [RegionProperties, !Ref "AWS::Region", Abbr] }
+
+  ADSNLBListener:
+    Type: 'AWS::ElasticLoadBalancingV2::Listener'
+    Properties:
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref ADSNLBTargetGroup
+      LoadBalancerArn: !Ref ADSNLB
+      # rwf port
+      Port: 14002
+      Protocol: TCP
+
+  ADSNLBTargetGroup:
+    Type: 'AWS::ElasticLoadBalancingV2::TargetGroup'
+    Properties:
+      HealthCheckIntervalSeconds: 30
+      HealthCheckPath: /
+      HealthCheckProtocol: HTTP
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 2
+      Matcher:
+        HttpCode: 200-399
+      Name: !Sub
+       - "a${assetId}-Nlb-tg-${subEnvironment}-${EnvAbbr}"
+       - { EnvAbbr: !FindInMap [EnvProperties, !Ref environment, abbr] }
+      Port: 14002
+      Protocol: TCP
+      Tags:
+        - Key: Name
+          Value: !Sub 
+          - "a${assetId}-tools-NLB-tg-${project}-${subEnvironment}-${EnvAbbr}-${RegAbbr}"
+          - { EnvAbbr: !FindInMap [EnvProperties, !Ref environment, abbr],
+              RegAbbr: !FindInMap [RegionProperties, !Ref "AWS::Region", Abbr] }
+      VpcId: !FindInMap [!FindInMap [RegionProperties, !Ref "AWS::Region", Abbr], !Ref account, VpcId]
+
+  # Using Nested Stack concept to Use components in other stack
+  Rolesandpolicies:
+    Type: 'AWS::CloudFormation::Stack'
+    Properties:
+      Parameters:
+        project: !Ref project
+        account: !Ref account
+        environment: !Ref environment
+        subEnvironment: !Ref subEnvironment
+        assetId: !Ref assetId
+        deployment: !Ref deployment
+        EnvAbbr: !FindInMap 
+          - EnvProperties
+          - !Ref environment
+          - abbr
+        RegAbbr: !FindInMap 
+          - RegionProperties
+          - !Ref 'AWS::Region'
+          - Abbr
+      # s3 buckt URL for Roles and Policies template
+      TemplateURL: 'https://s3-external-1.amazonaws.com/cf-templates-tb198x6giqjk-us-east-1/2018271c9Q-new.templateajh0v95xwjv'
+      TimeoutInMinutes: '5'
+   
+  # Using Nested Stack concept to Use components in other stack
+  Autoscalinggroupstack:
+    Type: 'AWS::CloudFormation::Stack'
+    DependsOn: [Rolesandpolicies,ADSEC2SecurityGroup,ADSNLBTargetGroup]
+    Properties:
+      Parameters:
+        ImageId: !FindInMap 
+          - RegionProperties
+          - !Ref 'AWS::Region'
+          - Ec2Ami
+        EC2KeyPairName: !Ref EC2KeyPairName
+        resourceOwner: !Ref resourceOwner
+        AvailabilityZone: !Ref AvailabilityZone
+        service: !Ref service
+        InstanceType: !Ref InstanceType
+        subnetId: !Ref subnetId
+        project: !Ref project
+        account: !Ref account
+        environment: !Ref environment
+        subEnvironment: !Ref subEnvironment
+        assetId: !Ref assetId
+        deployment: !Ref deployment
+        EnvAbbr: !FindInMap 
+          - EnvProperties
+          - !Ref environment
+          - abbr
+        RegAbbr: !FindInMap 
+          - RegionProperties
+          - !Ref 'AWS::Region'
+          - Abbr
+        EnvProperties: !FindInMap 
+          - EnvProperties
+          - !Ref 'Environment'
+          - tolower
+        ADSEC2SecurityGroup: !Ref ADSEC2SecurityGroup
+        ADSNLBTargetGroup: !Ref ADSNLBTargetGroup
+      # s3 buckt URL for AutoScalinggroup template
+      TemplateURL: 'https://s3-external-1.amazonaws.com/cf-templates-tb198x6giqjk-us-east-1/2018271iJi-new.templatekvdbxt1o7yc'
+      TimeoutInMinutes: '5'
