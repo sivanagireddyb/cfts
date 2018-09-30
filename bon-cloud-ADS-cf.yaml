@@ -1,0 +1,153 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: Creating Cloud ADS instances using autoscaler
+
+Metadata:
+  CommitHash: <<GIT_COMMIT_ID>>
+  Version: <<TEMPLATE_VERSION>>
+
+Parameters:
+  EC2KeyPairName:
+    Type: String
+  InstanceType:
+    Type: String
+  ImageId: 
+    Type: String
+  subnetId:
+    Type: String
+  account:
+    Type: String
+  ADSNLBTargetGroup:
+    Type: String
+  project:
+    Type: String
+  account:
+    Type: String
+  environment:
+    Type: String
+  subEnvironment:
+    Type: String
+  assetId:
+    Type: String
+  resourceOwner:
+    Type: String
+  deployment:
+    Type: String
+  EnvAbbr:
+    Type: String
+  RegAbbr:
+    Type: String
+  ADSEC2SecurityGroup:
+    Type: String
+  service:
+    Type: String
+  AvailabilityZone:
+    Type: String
+
+Resources:
+
+  ADSEC2LaunchConfiguration:
+    Type: 'AWS::AutoScaling::LaunchConfiguration'
+    Properties:
+      ImageId: !FindInMap 
+        - RegionProperties
+        - !Ref 'AWS::Region'
+        - Ec2Ami
+      KeyName: !Ref EC2KeyPairName
+      SecurityGroups: 
+         - !FindInMap [!FindInMap [RegionProperties, !Ref "AWS::Region", Abbr], !Ref account, sgFromBastion]
+         - !Ref ADSEC2SecurityGroup
+      InstanceType: !Ref InstanceType
+      UserData: !Base64 
+        'Fn::Join':
+          - ''
+          - - |
+              #!/bin/bash -xe
+            - |
+              yum install -y aws-cfn-bootstrap
+            - |
+              # Install the files and packages from the metadata
+            - '/opt/aws/bin/cfn-init -v '
+            - '         --stack '
+            - !Ref 'AWS::StackName'
+            - '         --resource WebServerInstance '
+            - '         --configsets Install '
+            - '         --region '
+            - !Ref 'AWS::Region'
+            - |+
+               
+  ADSEC2AutoScalingGroup:
+    Type: 'AWS::AutoScaling::AutoScalingGroup'
+    Properties:
+      VPCZoneIdentifier:
+        - !Ref subnetId
+      LaunchConfigurationName: !Ref ADSEC2LaunchConfiguration
+      MinSize: 4
+      MaxSize: 5
+      DesiredCapacity: 5
+      HealthCheckGracePeriod: 300
+      TargetGroupARNs:
+        - !Ref ADSNLBTargetGroup 
+      Tags:
+      - Key: 'Name'
+        Value: !Sub
+        - "ads-${service}-${deployment}-${subEnvironment}-${EnvAbbr}.${RegAbbr}${AvailabilityZone}"
+        - { EnvAbbr: !FindInMap [EnvProperties, !Ref environment, abbr],
+            RegAbbr: !FindInMap [RegionProperties, !Ref "AWS::Region", Abbr] }
+        PropagateAtLaunch: true
+      - Key: 'tr:application-asset-insight-id'
+        Value: !Ref assetId
+        PropagateAtLaunch: true
+      - Key: 'tr:resource-owner'
+        Value: !Ref resourceOwner
+        PropagateAtLaunch: true
+
+  
+  ADSEC2AutoScalingGroupScaleUpPolicy:
+    Type: 'AWS::AutoScaling::ScalingPolicy'
+    Properties:
+      AdjustmentType: ChangeInCapacity
+      AutoScalingGroupName: !Ref ADSEC2AutoScalingGroup
+      Cooldown: '60'
+      ScalingAdjustment: '1'
+
+  ADSEC2AutoScalingGroupScaleDownPolicy:
+    Type: 'AWS::AutoScaling::ScalingPolicy'
+    Properties:
+      AdjustmentType: ChangeInCapacity
+      AutoScalingGroupName: !Ref ADSEC2AutoScalingGroup
+      Cooldown: '60'
+      ScalingAdjustment: '-1'
+
+  CPUAlarmHigh:
+    Type: 'AWS::CloudWatch::Alarm'
+    Properties:
+      AlarmDescription: Scale-up if CPU > 70% for 10 minutes
+      MetricName: CPUUtilization
+      Namespace: AWS/EC2
+      Statistic: Average
+      Period: '300'
+      EvaluationPeriods: '2'
+      Threshold: '70'
+      AlarmActions:
+        - !Ref ADSEC2AutoScalingGroupScaleUpPolicy
+      Dimensions:
+        - Name: AutoScalingGroupName
+          Value: !Ref ADSEC2AutoScalingGroup
+      ComparisonOperator: GreaterThanThreshold
+
+  CPUAlarmLow:
+    Type: 'AWS::CloudWatch::Alarm'
+    Properties:
+      AlarmDescription: Scale-down if CPU < 60% for 10 minutes
+      MetricName: CPUUtilization
+      Namespace: AWS/EC2
+      Statistic: Average
+      Period: '300'
+      EvaluationPeriods: '2'
+      Threshold: '60'
+      AlarmActions:
+        - !Ref ADSEC2AutoScalingGroupScaleDownPolicy
+      Dimensions:
+        - Name: AutoScalingGroupName
+          Value: !Ref ADSEC2AutoScalingGroup
+      ComparisonOperator: LessThanThreshold
