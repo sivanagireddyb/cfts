@@ -1,0 +1,251 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: Creating Cloud Cache instances
+
+Metadata:
+  CommitHash: <<GIT_COMMIT_ID>>
+  Version: <<TEMPLATE_VERSION>>
+
+Parameters:
+  project:
+    Description: 'Project name [default edp-rt] (lowercase alphanumeric)'
+    Type: String
+    Default: edp-rt
+    MinLength: 1
+    AllowedPattern: '^[a-z0-9-]*$'
+  account:
+    Description: Choose which TR account should be deployed to
+    Type: String
+    Default: tr-fr-preprod
+    AllowedValues:
+      - tr-fr-sandbox
+      - tr-fr-preprod
+      - tr-fr-prod
+  environment:
+    Description: 'tr:environment, tr:environment-type'
+    Type: String
+    Default: DEVELOPMENT
+    AllowedValues:
+      - PRODUCTION
+      - PRE-PRODUCTION
+      - QUALITY-ASSURANCE
+      - INTEGRATION-TESTING
+      - DEVELOPMENT
+      - LAB
+  subEnvironment:
+    Description: 'tr:sub-environment'
+    Type: String
+    Default: tjd
+    MinLength: 1
+    MaxLength: 9
+    AllowedPattern: '^[a-z0-9-]*$'
+  deployment:
+    Description: 'Deployment (blue|green) and deployment version (#) e.g. ''blue-1'''
+    Type: String
+    Default: blue-1
+    MinLength: 6
+    AllowedPattern: '^[a-z0-9]*-[0-9]*$'
+  financialIdentifier:
+    Description: 'tr:financial-identifier'
+    Type: String
+    Default: 283711002
+    AllowedPattern: '^[0-9]*$'
+  assetId:
+    Description: 'tr:application-asset-insight-id'
+    Type: String
+    Default: 205069
+    AllowedPattern: '^[0-9]*$'
+  resourceOwner:
+    Description: 'tr:resource-owner - email address'
+    Type: String
+    Default: divya.vedhire@thomsonreuters.com
+    MinLength: 1
+  VpcId:
+    Description: which VPC this should be deployed to
+    Type: String
+    Default: vpc-0261f464
+  subnetId:
+    Description: Subnet ID for the private subnet
+    Type: String
+    Default: subnet-86febcab
+  privateSubnets:
+    Description: Choose which subnets this should be deployed to
+    Type: 'List<AWS::EC2::Subnet::Id>'
+    Default: subnet-86febcab
+  InstanceType:
+    Description: Which instance type should we use to build
+    Type: String
+    Default: m5.large
+    AllowedValues:
+      - t2.micro
+      - m5.large
+      - m5.xlarge
+      - m5.2xlarge
+      - m5.4xlarge
+  EC2KeyPairName:
+    Description: Key-pair name used for SSH access to CC hosts
+    Type: String
+    Default: ''
+  EC2AuthKey:
+    Description: String to append to authorized_keys (disabled for prod env)
+    Type: String
+    Default: ''
+    NoEcho: true
+  AvailabilityZone:
+    Description: Adjustments to docker container hostname for cnf parameter scoping
+    Type: String
+    Default: ''
+    AllowedValues:
+    # 3 values used in production (tr-fr-prod)
+    - ''          # standard in eu-west-1
+    - '-az1'      # premium-az1 in us-east-1
+    - '-az2'      # premium-az2 in us-east-1
+    # 3 values used in preprod (tr-fr-preprod)
+    - '-np'       # standard in eu-west-1
+    - '-az1-np'   # premium-az1 in eu-west-1
+    - '-az2-np'   # premium-az2 in eu-west-1
+
+Mappings:
+
+  RegionProperties:
+    eu-west-1: # Ireland
+      Ec2Ami: ami-0bdb1d6c15a40392c
+      Abbr: euw1
+    us-east-1: # N. Virginia
+      Ec2Ami: ami-04681a1dbd79675a5
+      Abbr: use1
+
+  use1:  # N Virginia
+   tr-fr-prod:
+     VpcId: vpc-ffae3c99  # tr-vpc-1
+     sgFromBastion: sg-65f42917  # fromBastionSSH
+     CidrIp: '10.62.0.0/16'
+   tr-fr-preprod:
+     VpcId: vpc-0261f464  # tr-vpc-1
+     sgFromBastion: sg-effe239d  # fromBastionSSH
+     CidrIp: '10.97.0.0/16'
+   tr-fr-sandbox:
+     VpcId: vpc-c451cea2  # tr-vpc-1
+     sgFromBastion: sg-54d20f26  # fromBastionSSH
+     CidrIp: '10.97.0.0/16'
+
+  euw1:  # Ireland
+    tr-fr-prod:
+      VpcId: vpc-12230976  # tr-vpc-1
+      sgFromBastion: sg-e9cad091  # fromBastionSSH
+      CidrIp: '10.158.0.0/16'
+    tr-fr-preprod:
+      VpcId: vpc-dbbf96bf  # tr-vpc-1
+      sgFromBastion: sg-a3cad0db  # fromBastionSSH
+      CidrIp: '10.97.0.0/16'
+    tr-fr-sandbox:
+      VpcId: vpc-98ab83fc  # tr-vpc-1
+      sgFromBastion: sg-b8d2c8c0  # fromBastionSSH
+      CidrIp: '10.97.0.0/16'
+
+  # abbr is an abbreviation form of the given evironment (use lower-case)
+  EnvProperties:
+    PRODUCTION:
+      tolower: production
+      abbr: prd
+    PRE-PRODUCTION:
+      tolower: pre-production
+      abbr: pp
+    QUALITY-ASSURANCE:
+      tolower: quality-assurance
+      abbr: qa
+    INTEGRATION-TESTING:
+      tolower: integration-testing
+      abbr: it
+    DEVELOPMENT:
+      tolower: development
+      abbr: dev
+    LAB:
+      tolower: lab
+      abbr: lab
+
+Resources:
+
+  CCSecurityGroup:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      GroupName: !Sub
+       - "a${assetId}-ec2-CC-sg-${project}-${subEnvironment}-${EnvAbbr}-${RegAbbr}"
+       - { EnvAbbr: !FindInMap [EnvProperties, !Ref environment, abbr],
+          RegAbbr: !FindInMap [RegionProperties, !Ref "AWS::Region", Abbr] }
+      VpcId: !FindInMap [!FindInMap [RegionProperties, !Ref "AWS::Region", Abbr], !Ref account, VpcId]
+      GroupDescription: Access to the EC2 Instances
+      SecurityGroupIngress:
+      - CidrIp: !Sub
+        - "${cidrip}"
+        - { cidrip: !FindInMap [!FindInMap [RegionProperties, !Ref "AWS::Region", Abbr], !Ref account, CidrIp] }
+        IpProtocol: tcp
+        FromPort: 22
+        ToPort: 22
+      - CidrIp: !Sub
+        - "${cidrip}"
+        - { cidrip: !FindInMap [!FindInMap [RegionProperties, !Ref "AWS::Region", Abbr], !Ref account, CidrIp] }
+        IpProtocol: tcp
+        FromPort: 14002
+        ToPort: 14002
+      Tags:
+      - Key: 'tr:resource-name'
+        Value: !Sub ec2-${project}-${subEnvironment}-${environment}-${AWS::Region}-sg
+      - Key: 'Name'
+        Value: !Sub
+        - "a${assetId}-tools-ec2-CCsg-${project}-${subEnvironment}-${EnvAbbr}-${RegAbbr}"
+        - { EnvAbbr: !FindInMap [EnvProperties, !Ref environment, abbr],
+            RegAbbr: !FindInMap [RegionProperties, !Ref "AWS::Region", Abbr] }
+
+  CCEC2LaunchConfiguration:
+    Type: 'AWS::AutoScaling::LaunchConfiguration'
+    Properties:
+      ImageId: !FindInMap 
+        - RegionProperties
+        - !Ref 'AWS::Region'
+        - Ec2Ami
+      KeyName: !Ref EC2KeyPairName
+      SecurityGroups: 
+         - !FindInMap [!FindInMap [RegionProperties, !Ref "AWS::Region", Abbr], !Ref account, sgFromBastion]
+         - !Ref CCSecurityGroup
+      InstanceType: !Ref InstanceType
+      UserData: !Base64 
+        'Fn::Join':
+          - ''
+          - - |
+              #!/bin/bash -xe
+            - |
+              yum install -y aws-cfn-bootstrap
+            - |
+              # Install the files and packages from the metadata
+            - '/opt/aws/bin/cfn-init -v '
+            - '         --stack '
+            - !Ref 'AWS::StackName'
+            - '         --resource WebServerInstance '
+            - '         --configsets Install '
+            - '         --region '
+            - !Ref 'AWS::Region'
+            - |+
+            
+  CCEC2AutoScalingGroup:
+    Type: 'AWS::AutoScaling::AutoScalingGroup'
+    Properties:
+      VPCZoneIdentifier:
+        - !Ref subnetId
+      LaunchConfigurationName: !Ref CCEC2LaunchConfiguration
+      MinSize: 4
+      MaxSize: 5
+      DesiredCapacity: 5
+      HealthCheckGracePeriod: 300
+      Tags:
+      - Key: 'Name'
+        Value: !Sub
+        - "CC-${deployment}-${subEnvironment}-${EnvAbbr}.${RegAbbr}${AvailabilityZone}"
+        - { EnvAbbr: !FindInMap [EnvProperties, !Ref environment, abbr],
+            RegAbbr: !FindInMap [RegionProperties, !Ref "AWS::Region", Abbr] }
+        PropagateAtLaunch: true
+      - Key: 'tr:application-asset-insight-id'
+        Value: !Ref assetId
+        PropagateAtLaunch: true
+      - Key: 'tr:resource-owner'
+        Value: !Ref resourceOwner
+        PropagateAtLaunch: true
